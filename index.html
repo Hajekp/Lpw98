@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Headset Voice Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F4; --panel:#FFFFFF; --ink:#1C2A3A; --muted:#5B6B7C; --line:#D3DAE2;
+  --accent:#2F5BEA; --accent-ink:#FFFFFF; --live:#D7263D; --ok:#1E8A5A; --chip:#E2E8EF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141B24; --panel:#1D2631; --ink:#E7EDF3; --muted:#9AA9B8; --line:#2E3A48;
+    --accent:#6F8FFF; --accent-ink:#0E1420; --live:#FF5A6E; --ok:#4FCB8F; --chip:#273240;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141B24; --panel:#1D2631; --ink:#E7EDF3; --muted:#9AA9B8; --line:#2E3A48;
+  --accent:#6F8FFF; --accent-ink:#0E1420; --live:#FF5A6E; --ok:#4FCB8F; --chip:#273240;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:17px;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:16px 16px 40px}
+h1{font-size:1.35rem;margin:4px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px;font-size:.95rem}
+button{font:inherit;cursor:pointer;border-radius:12px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);padding:12px 14px;min-height:48px}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.mic{width:100%;font-size:1.15rem;font-weight:700;background:var(--accent);color:var(--accent-ink);border:none;
+  display:flex;align-items:center;justify-content:center;gap:10px;min-height:60px}
+.mic.on{background:var(--live);color:#fff}
+.dot{width:12px;height:12px;border-radius:50%;background:currentColor}
+.mic.on .dot{animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.mic.on .dot{animation:none}}
+.stage{margin:16px 0;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+.fieldname{font-size:2rem;font-weight:700;line-height:1.1;margin:0}
+.step{color:var(--muted);font-size:.9rem;margin-bottom:6px}
+.value{font-size:2.4rem;font-weight:700;min-height:1.3em;margin-top:8px;word-break:break-word;color:var(--accent)}
+.value.empty{color:var(--line)}
+.heard{color:var(--muted);min-height:1.4em;margin-top:6px;font-style:italic}
+.status{font-size:.9rem;color:var(--muted);margin-top:8px;min-height:1.2em}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.chip{font-size:.85rem;padding:6px 10px;min-height:36px;border-radius:999px;background:var(--chip);border:1px solid transparent}
+.chip.cur{border-color:var(--accent);color:var(--accent);font-weight:700}
+.chip.filled::after{content:" ✓";color:var(--ok)}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.save{background:var(--ok);color:#fff;border:none;font-weight:700}
+details{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:12px 0}
+summary{font-weight:700;cursor:pointer}
+.cmds{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin-top:10px;font-size:.95rem}
+.cmds b{white-space:nowrap}
+label.tog{display:flex;align-items:center;gap:10px;margin-top:10px}
+label.tog input{width:22px;height:22px}
+h2{font-size:1.1rem;margin:22px 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+h2 span{color:var(--muted);font-weight:400;font-size:.9rem}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;white-space:nowrap}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:700}
+td[contenteditable]:focus{outline:2px solid var(--accent);outline-offset:-2px}
+td.del button{min-height:32px;padding:4px 10px;font-size:.85rem}
+.empty-note{padding:16px;color:var(--muted)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.primary{background:var(--accent);color:var(--accent-ink);border:none;font-weight:700}
+textarea{width:100%;margin-top:10px;font:inherit;font-size:.8rem;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);padding:8px;display:none}
+.micstate{display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:700;font-size:1rem}
+.micstate .led{width:14px;height:14px;border-radius:50%;background:var(--line)}
+.micstate.live .led{background:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 25%,transparent)}
+.micstate.live{color:var(--ok)}
+.micstate.wait .led{background:#E0A100}
+.micstate.wait{color:#B07F00}
+.micstate.talk .led{background:var(--accent)}
+.micstate.talk{color:var(--accent)}
+.micstate.off{color:var(--muted)}
+.warn{background:var(--live);color:#fff;padding:12px 14px;border-radius:12px;margin-bottom:12px;display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>Headset voice log</h1>
+  <p class="sub">Tap start once, then fill every field by voice. Copy the rows into Google Sheets when you're done.</p>
+
+  <div class="warn" id="warn"></div>
+
+  <button class="mic" id="micBtn"><span class="dot"></span><span id="micLabel">Start listening</span></button>
+  <div class="micstate off" id="micState" role="status"><span class="led"></span><span id="micStateText">Mic off</span></div>
+
+  <section class="stage" aria-live="polite">
+    <div class="step" id="step"></div>
+    <p class="fieldname" id="fieldName"></p>
+    <div class="value" id="value"></div>
+    <div class="heard" id="heard"></div>
+    <div class="status" id="status"></div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <div class="row3">
+    <button id="backBtn">Back</button>
+    <button id="nextBtn">Next</button>
+    <button id="saveBtn" class="save">Save row</button>
+  </div>
+
+  <details>
+    <summary>Voice commands</summary>
+    <div class="cmds">
+      <b>"next" / "skip"</b><span>Go to the next field</span>
+      <b>"back"</b><span>Go to the previous field</span>
+      <b>"clear"</b><span>Erase the current field</span>
+      <b>"new row"</b><span>Save this headset and start the next</span>
+      <b>"read back"</b><span>Hear the current row</span>
+      <b>"undo"</b><span>Delete the last saved row</span>
+      <b>"stop listening"</b><span>Turn the mic off</span>
+    </div>
+    <p style="margin:10px 0 0;color:var(--muted);font-size:.9rem">You can say a value and a command together, like "42 next". Saying "next" on the last field saves the row. Leave throughput blank and it's calculated from data size and upload times.</p>
+    <label class="tog"><input type="checkbox" id="speakTog" checked> Say each field name out loud</label>
+    <label class="tog"><input type="checkbox" id="dateTog" checked> Fill in today's date automatically</label>
+    <label class="tog"><input type="checkbox" id="beepTog" checked> Beep when it catches something</label>
+    <label class="tog"><input type="checkbox" id="headerTog" checked> Include column headers when copying</label>
+  </details>
+
+  <h2>Saved rows <span id="count">0</span></h2>
+  <div class="tablewrap"><table id="table"></table></div>
+  <div class="actions">
+    <button class="primary" id="copyBtn">Copy for Google Sheets</button>
+    <button id="clearAllBtn">Clear all rows</button>
+  </div>
+  <textarea id="fallback" rows="6" readonly></textarea>
+</main>
+
+<script>
+const FIELDS=[
+  {k:'date',label:'Date',say:'Date'},
+  {k:'headset',label:'Headset #',say:'Headset number',num:true},
+  {k:'episodes',label:'Episode count',say:'Episode count',num:true},
+  {k:'size',label:'Data size (GB)',say:'Data size',num:true},
+  {k:'hours',label:'Hours of data',say:'Hours of data',num:true},
+  {k:'start',label:'Upload start',say:'Upload start',time:true},
+  {k:'finish',label:'Est. upload finish',say:'Upload finish',time:true},
+  {k:'thru',label:'Throughput (GB/hr)',say:'Throughput',num:true}
+];
+const KEY='headsetVoiceLog.v1';
+const $=id=>document.getElementById(id);
+let rows=[], cur={}, idx=0, listening=false, speaking=false, rec=null, wakeLock=null;
+let settings={speak:true,autoDate:true,header:true,beep:true};
+let actx=null,liveTimer=null;
+function beep(freqs){
+  if(!settings.beep||!actx)return;
+  try{
+    let t=actx.currentTime;
+    freqs.forEach(f=>{
+      const o=actx.createOscillator(),g=actx.createGain();
+      o.type='sine';o.frequency.value=f;
+      g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.25,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+      o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+0.13);t+=0.15;
+    });
+  }catch(e){}
+}
+function micState(state){
+  const el=$('micState'),tx=$('micStateText');
+  el.className='micstate '+state;
+  tx.textContent={live:'Mic live — go ahead',wait:'Reconnecting…',talk:'Speaking — wait',off:'Mic off'}[state];
+  clearTimeout(liveTimer);
+  if(state==='wait'&&listening)liveTimer=setTimeout(()=>{if(listening&&!speaking){try{rec&&rec.abort();}catch(e){}startRec();}},4000);
+}
+
+function today(){const d=new Date();return (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();}
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY)||'{}');rows=s.rows||[];cur=s.cur||{};idx=s.idx||0;Object.assign(settings,s.settings||{});}catch(e){}}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify({rows,cur,idx,settings}));}catch(e){}}
+
+/* ---------- parsing ---------- */
+const SMALL={zero:0,oh:0,one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19,to:null,too:null,for:null};
+SMALL.to=2;SMALL.too=2;SMALL.for=4;
+const TENS={twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+function wordsToDigits(s){
+  const toks=s.toLowerCase().replace(/-/g,' ').split(/\s+/).filter(Boolean);
+  const out=[];let n=null,dec=null;
+  const flush=()=>{if(n!==null)out.push(String(n)+(dec?'.'+dec:''));n=null;dec=null;};
+  for(const t of toks){
+    if(dec!==null&&t in SMALL&&SMALL[t]<10){dec+=SMALL[t];continue;}
+    if(t in TENS){if(n!==null&&n%100!==0)flush();n=(n||0)+TENS[t];continue;}
+    if(t in SMALL){if(n!==null&&(n%10!==0||n===0))flush();n=(n||0)+SMALL[t];continue;}
+    if(t==='hundred'){n=(n||1)*100;continue;}
+    if((t==='point'||t==='dot')){if(n===null)n=0;dec='';continue;}
+    flush();out.push(t);
+  }
+  flush();return out.join(' ');
+}
+function parseNum(s){
+  const m=wordsToDigits(s).replace(/,/g,'').match(/-?\d+(\.\d+)?/);
+  return m?m[0]:s.trim();
+}
+function parseTime(s){
+  let t=wordsToDigits(s).toLowerCase().replace(/\./g,'').replace(/o'?clock/,'').trim();
+  let ap=null;
+  if(/\b(pm|p m)\b/.test(t))ap='PM';else if(/\b(am|a m)\b/.test(t))ap='AM';
+  t=t.replace(/\b(pm|am|p m|a m)\b/g,'').trim();
+  let h,m;
+  let mm=t.match(/(\d{1,2})\s*:\s*(\d{2})/);
+  if(mm){h=+mm[1];m=+mm[2];}
+  else if((mm=t.match(/^(\d{1,2})\s+(\d{1,2})$/))){h=+mm[1];m=+mm[2];}
+  else if((mm=t.match(/^(\d{3,4})$/))){h=+mm[1].slice(0,-2);m=+mm[1].slice(-2);}
+  else if((mm=t.match(/^(\d{1,2})$/))){h=+mm[1];m=0;}
+  else return s.trim();
+  if(h>23||m>59)return s.trim();
+  if(!ap){ if(h===0){h=12;ap='AM';} else if(h>12){h-=12;ap='PM';} else return h+':'+String(m).padStart(2,'0'); }
+  return h+':'+String(m).padStart(2,'0')+' '+ap;
+}
+function toMinutes(t){
+  const m=String(t).match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);if(!m)return null;
+  let h=+m[1];const mi=+m[2];const ap=(m[3]||'').toUpperCase();
+  if(ap==='PM'&&h<12)h+=12;if(ap==='AM'&&h===12)h=0;return h*60+mi;
+}
+function normalize(f,v){if(!v)return v;if(f.num)return parseNum(v);if(f.time)return parseTime(v);return v.trim();}
+function calcThroughput(r){
+  if(r.thru)return;
+  const size=parseFloat(r.size),a=toMinutes(r.start),b=toMinutes(r.finish);
+  if(isNaN(size)||a===null||b===null)return;
+  let d=b-a;if(d<=0)d+=1440;r.thru=(size/(d/60)).toFixed(2);
+}
+
+/* ---------- speech out ---------- */
+function speak(msg){
+  if(!settings.speak||!window.speechSynthesis){return;}
+  speaking=true;micState('talk');
+  try{rec&&rec.abort();}catch(e){}
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(msg);u.rate=1.1;
+  const done=()=>{speaking=false;if(listening)startRec();};
+  u.onend=done;u.onerror=done;
+  speechSynthesis.speak(u);
+}
+
+/* ---------- state actions ---------- */
+function setStatus(t){$('status').textContent=t;}
+function firstIdx(){return settings.autoDate?1:0;}
+function newRow(){cur={};if(settings.autoDate)cur.date=today();idx=firstIdx();}
+function finalizeField(){const f=FIELDS[idx];if(cur[f.k])cur[f.k]=normalize(f,cur[f.k]);}
+function goNext(){
+  finalizeField();
+  if(idx>=FIELDS.length-1){saveRow();return;}
+  idx++;render();persist();speak(FIELDS[idx].say);
+}
+function goBack(){finalizeField();if(idx>0)idx--;render();persist();speak(FIELDS[idx].say);}
+function saveRow(){
+  finalizeField();
+  const hasData=FIELDS.some(f=>f.k!=='date'&&cur[f.k]);
+  if(!hasData){setStatus('Nothing to save yet.');speak('Nothing to save');return;}
+  if(!cur.date)cur.date=today();
+  calcThroughput(cur);
+  rows.push(cur);const hs=cur.headset;beep([660,880,1320]);
+  newRow();render();persist();
+  setStatus('Saved headset '+(hs||'')+'.');
+  speak('Saved'+(hs?' headset '+hs:'')+'. '+FIELDS[idx].say);
+}
+function undo(){if(!rows.length){speak('No rows to undo');return;}const r=rows.pop();render();persist();setStatus('Removed headset '+(r.headset||'')+'.');speak('Removed last row');}
+function readBack(){
+  const parts=FIELDS.filter(f=>cur[f.k]).map(f=>f.say+' '+cur[f.k]);
+  speak(parts.length?parts.join('. '):'This row is empty');
+}
+
+/* ---------- voice commands ---------- */
+const CMD=/\b(new row|next headset|save row|stop listening|read back|repeat|go back|next|skip|back|undo|clear)\b/g;
+function handle(text){
+  const t=text.toLowerCase().trim();if(!t)return;
+  CMD.lastIndex=0;beep(CMD.test(t)?[880,1175]:[988]);
+  let last=0,m;CMD.lastIndex=0;
+  const ops=[];
+  while((m=CMD.exec(t))){ops.push({val:t.slice(last,m.index).trim(),cmd:m[1]});last=CMD.lastIndex;}
+  const tail=t.slice(last).trim();
+  for(const op of ops){addValue(op.val);runCmd(op.cmd);}
+  if(tail)addValue(tail);
+  render();persist();
+}
+function addValue(v){if(!v)return;const f=FIELDS[idx];cur[f.k]=cur[f.k]?cur[f.k]+' '+v:v;}
+function runCmd(c){
+  if(c==='next'||c==='skip')goNext();
+  else if(c==='back'||c==='go back')goBack();
+  else if(c==='clear'){cur[FIELDS[idx].k]='';speak('Cleared');}
+  else if(c==='new row'||c==='next headset'||c==='save row')saveRow();
+  else if(c==='undo')undo();
+  else if(c==='read back'||c==='repeat')readBack();
+  else if(c==='stop listening')stopListening();
+}
+
+/* ---------- recognition ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function startRec(){
+  if(!SR||speaking)return;
+  rec=new SR();rec.lang='en-US';rec.continuous=false;rec.interimResults=true;rec.maxAlternatives=1;
+  rec.onstart=()=>micState('live');
+  rec.onresult=e=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){
+      const r=e.results[i];
+      if(r.isFinal){$('heard').textContent='Heard: "'+r[0].transcript.trim()+'"';handle(r[0].transcript);}
+      else interim+=r[0].transcript;
+    }
+    if(interim)$('heard').textContent=interim+'…';
+  };
+  rec.onerror=e=>{
+    if(e.error==='not-allowed'||e.error==='service-not-allowed'){
+      listening=false;renderMic();micState('off');
+      showWarn('Microphone access was blocked. Allow the mic for this page in your browser settings, or open the page directly in Chrome.');
+    }
+  };
+  rec.onend=()=>{if(listening&&!speaking)micState('wait');if(listening&&!speaking)setTimeout(()=>{if(listening&&!speaking)startRec();},150);};
+  micState('wait');
+  try{rec.start();}catch(e){}
+}
+async function startListening(){
+  if(!SR){showWarn('This browser can\'t do speech recognition. Open the page in Chrome (Android) or Safari (iPhone).');return;}
+  listening=true;renderMic();
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();}catch(e){}
+  try{if('wakeLock' in navigator)wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
+  if(settings.speak)speak(FIELDS[idx].say);else startRec();
+}
+function stopListening(){
+  listening=false;try{rec&&rec.abort();}catch(e){}
+  try{wakeLock&&wakeLock.release();}catch(e){}wakeLock=null;
+  renderMic();micState('off');setStatus('Mic off.');
+}
+function showWarn(t){const w=$('warn');w.textContent=t;w.style.display='block';}
+
+/* ---------- render ---------- */
+function renderMic(){$('micBtn').classList.toggle('on',listening);$('micLabel').textContent=listening?'Listening — tap to stop':'Start listening';}
+function render(){
+  const f=FIELDS[idx];
+  $('step').textContent='Field '+(idx+1)+' of '+FIELDS.length+(f.k==='thru'?' (leave blank to auto-calculate)':'');
+  $('fieldName').textContent=f.label;
+  const v=cur[f.k]||'';const ve=$('value');ve.textContent=v||'—';ve.classList.toggle('empty',!v);
+  const chips=$('chips');chips.innerHTML='';
+  FIELDS.forEach((ff,i)=>{
+    const b=document.createElement('button');b.className='chip'+(i===idx?' cur':'')+(cur[ff.k]?' filled':'');
+    b.textContent=ff.label;b.onclick=()=>{finalizeField();idx=i;render();persist();};chips.appendChild(b);
+  });
+  $('count').textContent=rows.length+(rows.length===1?' row':' rows');
+  const tb=$('table');
+  if(!rows.length){tb.innerHTML='<tr><td class="empty-note">Saved headsets show up here. Say "new row" after filling in one.</td></tr>';}
+  else{
+    let h='<thead><tr>'+FIELDS.map(f=>'<th>'+f.label+'</th>').join('')+'<th></th></tr></thead><tbody>';
+    rows.forEach((r,ri)=>{h+='<tr>'+FIELDS.map(f=>'<td contenteditable data-r="'+ri+'" data-k="'+f.k+'">'+esc(r[f.k]||'')+'</td>').join('')+'<td class="del"><button data-del="'+ri+'">Delete</button></td></tr>';});
+    tb.innerHTML=h+'</tbody>';
+    tb.querySelectorAll('td[contenteditable]').forEach(td=>td.onblur=()=>{rows[+td.dataset.r][td.dataset.k]=td.textContent.trim();persist();});
+    tb.querySelectorAll('button[data-del]').forEach(b=>b.onclick=()=>{rows.splice(+b.dataset.del,1);render();persist();});
+  }
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ---------- export ---------- */
+function tsv(){
+  const lines=[];if(settings.header)lines.push(FIELDS.map(f=>f.label).join('\t'));
+  rows.forEach(r=>lines.push(FIELDS.map(f=>String(r[f.k]||'').replace(/\t|\n/g,' ')).join('\t')));
+  return lines.join('\n');
+}
+async function copyRows(){
+  if(!rows.length){setStatus('No saved rows to copy.');return;}
+  const text=tsv();
+  try{await navigator.clipboard.writeText(text);setStatus('Copied '+rows.length+' rows. Paste into cell A1 of your sheet.');$('fallback').style.display='none';return;}catch(e){}
+  const ta=$('fallback');ta.value=text;ta.style.display='block';ta.focus();ta.select();
+  try{document.execCommand('copy');setStatus('Copied. Paste into your sheet.');}catch(e){setStatus('Select all the text below and copy it.');}
+}
+
+/* ---------- wire up ---------- */
+load();
+if(!cur||!Object.keys(cur).length)newRow();
+$('speakTog').checked=settings.speak;$('dateTog').checked=settings.autoDate;$('headerTog').checked=settings.header;$('beepTog').checked=settings.beep;
+$('beepTog').onchange=e=>{settings.beep=e.target.checked;persist();};
+$('speakTog').onchange=e=>{settings.speak=e.target.checked;persist();};
+$('dateTog').onchange=e=>{settings.autoDate=e.target.checked;if(settings.autoDate&&!cur.date)cur.date=today();if(settings.autoDate&&idx===0)idx=1;render();persist();};
+$('headerTog').onchange=e=>{settings.header=e.target.checked;persist();};
+$('micBtn').onclick=()=>listening?stopListening():startListening();
+$('nextBtn').onclick=goNext;$('backBtn').onclick=goBack;$('saveBtn').onclick=saveRow;
+$('copyBtn').onclick=copyRows;
+$('clearAllBtn').onclick=()=>{if(confirm('Delete all saved rows?')){rows=[];render();persist();}};
+document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&listening){try{wakeLock=await navigator.wakeLock.request('screen');}catch(e){}}});
+if(!SR)showWarn('This browser can\'t do speech recognition. Open the page in Chrome (Android) or Safari (iPhone).');
+renderMic();render();
+</script>
+</body>
+</html>
