@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Headset Voice Log</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#EEF1F4; --panel:#FFFFFF; --ink:#1C2A3A; --muted:#5B6B7C; --line:#D3DAE2;
+  --accent:#2F5BEA; --accent-ink:#FFFFFF; --live:#D7263D; --ok:#1E8A5A; --chip:#E2E8EF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141B24; --panel:#1D2631; --ink:#E7EDF3; --muted:#9AA9B8; --line:#2E3A48;
+    --accent:#6F8FFF; --accent-ink:#0E1420; --live:#FF5A6E; --ok:#4FCB8F; --chip:#273240;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141B24; --panel:#1D2631; --ink:#E7EDF3; --muted:#9AA9B8; --line:#2E3A48;
+  --accent:#6F8FFF; --accent-ink:#0E1420; --live:#FF5A6E; --ok:#4FCB8F; --chip:#273240;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  font-size:17px;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:16px 16px 40px}
+h1{font-size:1.35rem;margin:4px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px;font-size:.95rem}
+button{font:inherit;cursor:pointer;border-radius:12px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);padding:12px 14px;min-height:48px}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.mic{width:100%;font-size:1.15rem;font-weight:700;background:var(--accent);color:var(--accent-ink);border:none;
+  display:flex;align-items:center;justify-content:center;gap:10px;min-height:60px}
+.mic.on{background:var(--live);color:#fff}
+.dot{width:12px;height:12px;border-radius:50%;background:currentColor}
+.mic.on .dot{animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.25}}
+@media (prefers-reduced-motion:reduce){.mic.on .dot{animation:none}}
+.stage{margin:16px 0;background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:18px}
+.fieldname{font-size:2rem;font-weight:700;line-height:1.1;margin:0}
+.step{color:var(--muted);font-size:.9rem;margin-bottom:6px}
+.value{font-size:2.4rem;font-weight:700;min-height:1.3em;margin-top:8px;word-break:break-word;color:var(--accent)}
+.value.empty{color:var(--line)}
+.heard{color:var(--muted);min-height:1.4em;margin-top:6px;font-style:italic}
+.status{font-size:.9rem;color:var(--muted);margin-top:8px;min-height:1.2em}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:14px}
+.chip{font-size:.85rem;padding:6px 10px;min-height:36px;border-radius:999px;background:var(--chip);border:1px solid transparent}
+.chip.cur{border-color:var(--accent);color:var(--accent);font-weight:700}
+.chip.filled::after{content:" ✓";color:var(--ok)}
+.row3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px}
+.save{background:var(--ok);color:#fff;border:none;font-weight:700}
+details{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin:12px 0}
+summary{font-weight:700;cursor:pointer}
+.cmds{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin-top:10px;font-size:.95rem}
+.cmds b{white-space:nowrap}
+label.tog{display:flex;align-items:center;gap:10px;margin-top:10px}
+label.tog input{width:22px;height:22px}
+h2{font-size:1.1rem;margin:22px 0 8px;display:flex;justify-content:space-between;align-items:baseline}
+h2 span{color:var(--muted);font-weight:400;font-size:.9rem}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;font-size:.9rem;white-space:nowrap}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:left}
+th{color:var(--muted);font-weight:700}
+td[contenteditable]:focus{outline:2px solid var(--accent);outline-offset:-2px}
+td.del button{min-height:32px;padding:4px 10px;font-size:.85rem}
+.empty-note{padding:16px;color:var(--muted)}
+.actions{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.primary{background:var(--accent);color:var(--accent-ink);border:none;font-weight:700}
+textarea{width:100%;margin-top:10px;font:inherit;font-size:.8rem;border-radius:10px;border:1px solid var(--line);
+  background:var(--panel);color:var(--ink);padding:8px;display:none}
+.micstate{display:flex;align-items:center;gap:8px;margin-top:10px;font-weight:700;font-size:1rem}
+.micstate .led{width:14px;height:14px;border-radius:50%;background:var(--line)}
+.micstate.live .led{background:var(--ok);box-shadow:0 0 0 4px color-mix(in srgb,var(--ok) 25%,transparent)}
+.micstate.live{color:var(--ok)}
+.micstate.wait .led{background:#E0A100}
+.micstate.wait{color:#B07F00}
+.micstate.talk .led{background:var(--accent)}
+.micstate.talk{color:var(--accent)}
+.micstate.off{color:var(--muted)}
+.badge{display:inline-block;font-size:.85rem;font-weight:700;padding:4px 10px;border-radius:999px;background:var(--chip);color:var(--muted);margin-bottom:8px}
+.badge.edit{background:var(--accent);color:var(--accent-ink)}
+.datebar{color:var(--muted);font-size:.9rem;margin-top:-6px;margin-bottom:12px}
+tr.editing td{background:color-mix(in srgb,var(--accent) 15%,transparent)}
+td.act{display:flex;gap:6px}
+td.act button{min-height:34px;padding:4px 10px;font-size:.85rem}
+.warn{background:var(--live);color:#fff;padding:12px 14px;border-radius:12px;margin-bottom:12px;display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>Headset voice log</h1>
+  <p class="sub">Tap start once, then fill every field by voice. Copy the rows into Google Sheets when you're done.</p>
+  <div class="datebar" id="dateBar"></div>
+
+  <div class="warn" id="warn"></div>
+
+  <button class="mic" id="micBtn"><span class="dot"></span><span id="micLabel">Start listening</span></button>
+  <div class="micstate off" id="micState" role="status"><span class="led"></span><span id="micStateText">Mic off</span></div>
+
+  <section class="stage" aria-live="polite">
+    <span class="badge" id="badge">New headset</span>
+    <div class="step" id="step"></div>
+    <p class="fieldname" id="fieldName"></p>
+    <div class="value" id="value"></div>
+    <div class="heard" id="heard"></div>
+    <div class="status" id="status"></div>
+    <div class="chips" id="chips"></div>
+  </section>
+
+  <div class="row3">
+    <button id="backBtn">Back</button>
+    <button id="nextBtn">Next</button>
+    <button id="saveBtn" class="save">Save row</button>
+  </div>
+
+  <details>
+    <summary>Voice commands</summary>
+    <div class="cmds">
+      <b>"next" / "skip"</b><span>Go to the next field</span>
+      <b>"back"</b><span>Go to the previous field</span>
+      <b>"go to finish"</b><span>Jump to a field (headset, episodes, size, hours, start, finish, throughput)</span>
+      <b>"headset 12"</b><span>Open headset 12's saved row to edit it, or start a new row for it</span>
+      <b>"clear"</b><span>Erase the current field</span>
+      <b>"save" / "new row"</b><span>Save this headset and start the next</span>
+      <b>"read back"</b><span>Hear the whole current row</span>
+      <b>"undo"</b><span>Delete the last saved row</span>
+      <b>"stop listening"</b><span>Turn the mic off</span>
+    </div>
+    <p style="margin:10px 0 0;color:var(--muted);font-size:.9rem">Every value you say is read back to you. Saying a new value replaces the old one. Saying a headset number that's already saved today opens that row. Throughput fills in automatically from data size and upload times unless you say one.</p>
+    <label class="tog"><input type="checkbox" id="speakTog" checked> Talk back (read values and field names)</label>
+    <label class="tog"><input type="checkbox" id="beepTog" checked> Beep when it catches something</label>
+    <label class="tog"><input type="checkbox" id="headerTog" checked> Include column headers when copying</label>
+  </details>
+
+  <h2>Saved rows <span id="count">0</span></h2>
+  <div class="tablewrap"><table id="table"></table></div>
+  <div class="actions">
+    <button class="primary" id="copyBtn">Copy for Google Sheets</button>
+    <button id="clearAllBtn">Clear all rows</button>
+  </div>
+  <textarea id="fallback" rows="6" readonly></textarea>
+</main>
+
+<script>
+const FIELDS=[
+  {k:'headset',label:'Headset #',say:'Headset number',num:true,alias:['headset number','headset']},
+  {k:'episodes',label:'Episode count',say:'Episode count',num:true,alias:['episode count','episodes','episode']},
+  {k:'size',label:'Data size (GB)',say:'Data size',num:true,alias:['data size','size']},
+  {k:'hours',label:'Hours of data',say:'Hours of data',dur:true,alias:['hours of data','hours']},
+  {k:'start',label:'Upload start',say:'Upload start',time:true,alias:['upload start','start time','start']},
+  {k:'finish',label:'Est. upload finish',say:'Upload finish',time:true,alias:['upload finish','finish time','finish','end time','end']},
+  {k:'thru',label:'Throughput (GB/hr)',say:'Throughput',num:true,alias:['throughput']}
+];
+const COLS=[{k:'date',label:'Date'},...FIELDS];
+const KEY='headsetVoiceLog.v2', OLDKEY='headsetVoiceLog.v1';
+const $=id=>document.getElementById(id);
+let rows=[],cur={},idx=0,editIdx=null,listening=false,speaking=false,rec=null,wakeLock=null;
+let settings={speak:true,header:true,beep:true};
+let actx=null,liveTimer=null,sayQ=[];
+
+function today(){const d=new Date();return (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();}
+function load(){
+  try{
+    const s=JSON.parse(localStorage.getItem(KEY)||'null');
+    if(s){rows=s.rows||[];cur=s.cur||{};idx=s.idx||0;editIdx=(s.editIdx??null);Object.assign(settings,s.settings||{});}
+    else{const o=JSON.parse(localStorage.getItem(OLDKEY)||'{}');rows=o.rows||[];if(o.settings){settings.speak=o.settings.speak!==false;settings.header=o.settings.header!==false;settings.beep=o.settings.beep!==false;}}
+  }catch(e){}
+  if(idx<0||idx>=FIELDS.length)idx=0;
+  if(editIdx!==null&&!rows[editIdx])editIdx=null;
+}
+function persist(){try{localStorage.setItem(KEY,JSON.stringify({rows,cur,idx,editIdx,settings}));}catch(e){}}
+
+/* ---------- audio feedback ---------- */
+function beep(freqs){
+  if(!settings.beep||!actx)return;
+  try{let t=actx.currentTime;freqs.forEach(f=>{const o=actx.createOscillator(),g=actx.createGain();o.type='sine';o.frequency.value=f;
+    g.gain.setValueAtTime(0.0001,t);g.gain.exponentialRampToValueAtTime(0.25,t+0.01);g.gain.exponentialRampToValueAtTime(0.0001,t+0.12);
+    o.connect(g);g.connect(actx.destination);o.start(t);o.stop(t+0.13);t+=0.15;});}catch(e){}
+}
+function micState(state){
+  const el=$('micState');el.className='micstate '+state;
+  $('micStateText').textContent={live:'Mic live — go ahead',wait:'Reconnecting…',talk:'Talking — wait',off:'Mic off'}[state];
+  clearTimeout(liveTimer);
+  if(state==='wait'&&listening)liveTimer=setTimeout(()=>{if(listening&&!speaking){try{rec&&rec.abort();}catch(e){}startRec();}},4000);
+}
+function q(msg){if(msg)sayQ.push(msg);}
+function flush(){const m=sayQ.join('. ');sayQ=[];if(m)speak(m);}
+function speak(msg){
+  if(!settings.speak||!window.speechSynthesis)return;
+  speaking=true;micState('talk');
+  try{rec&&rec.abort();}catch(e){}
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(msg);u.rate=1.1;
+  const done=()=>{speaking=false;if(listening)startRec();else micState('off');};
+  u.onend=done;u.onerror=done;speechSynthesis.speak(u);
+}
+
+/* ---------- parsing ---------- */
+const SMALL={zero:0,oh:0,one:1,two:2,to:2,too:2,three:3,four:4,for:4,five:5,six:6,seven:7,eight:8,ate:8,nine:9,ten:10,eleven:11,twelve:12,thirteen:13,fourteen:14,fifteen:15,sixteen:16,seventeen:17,eighteen:18,nineteen:19};
+const TENS={twenty:20,thirty:30,forty:40,fifty:50,sixty:60,seventy:70,eighty:80,ninety:90};
+function wordsToDigits(s){
+  const toks=s.toLowerCase().replace(/-/g,' ').split(/\s+/).filter(Boolean);const out=[];let n=null,dec=null;
+  const flushN=()=>{if(n!==null)out.push(String(n)+(dec?'.'+dec:''));n=null;dec=null;};
+  for(const t of toks){
+    if(dec!==null&&t in SMALL&&SMALL[t]<10){dec+=SMALL[t];continue;}
+    if(t in TENS){if(n!==null&&n%100!==0)flushN();n=(n||0)+TENS[t];continue;}
+    if(t in SMALL){if(n!==null&&(n%10!==0||n===0))flushN();n=(n||0)+SMALL[t];continue;}
+    if(t==='hundred'){n=(n||1)*100;continue;}
+    if(t==='point'||t==='dot'){if(n===null)n=0;dec='';continue;}
+    flushN();out.push(t);
+  }
+  flushN();return out.join(' ');
+}
+function parseNum(s){const m=wordsToDigits(String(s)).replace(/,/g,'').match(/-?\d+(\.\d+)?/);return m?m[0]:String(s).trim();}
+function parseTime(s){
+  let t=wordsToDigits(s).toLowerCase().replace(/\./g,'').replace(/o'?clock/,'').trim();let ap=null;
+  if(/\b(pm|p m)\b/.test(t))ap='PM';else if(/\b(am|a m)\b/.test(t))ap='AM';
+  t=t.replace(/\b(pm|am|p m|a m)\b/g,'').trim();let h,m,mm;
+  if((mm=t.match(/(\d{1,2})\s*:\s*(\d{2})/))){h=+mm[1];m=+mm[2];}
+  else if((mm=t.match(/^(\d{1,2})\s+(\d{1,2})$/))){h=+mm[1];m=+mm[2];}
+  else if((mm=t.match(/^(\d{3,4})$/))){h=+mm[1].slice(0,-2);m=+mm[1].slice(-2);}
+  else if((mm=t.match(/^(\d{1,2})$/))){h=+mm[1];m=0;}
+  else return s.trim();
+  if(h>23||m>59)return s.trim();
+  if(!ap){if(h===0){h=12;ap='AM';}else if(h>12){h-=12;ap='PM';}else return h+':'+String(m).padStart(2,'0');}
+  return h+':'+String(m).padStart(2,'0')+' '+ap;
+}
+function parseDur(s){
+  let t=' '+String(s).toLowerCase().replace(/\ban hour\b/g,'1 hour').replace(/\ba half\b/g,'half')+' ';
+  t=wordsToDigits(t).replace(/,/g,' ');
+  let h=null,m=null,mm;
+  if((mm=t.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/)))h=parseFloat(mm[1]);
+  if((mm=t.match(/(\d+)\s*(?:minutes?|mins?|m)\b/)))m=parseInt(mm[1]);
+  if(h===null&&m===null){
+    if((mm=t.match(/(\d{1,3})\s*:\s*(\d{1,2})/))){h=+mm[1];m=+mm[2];}
+    else if((mm=t.match(/^\s*(\d{1,3})\s+(\d{1,2})\s*$/))){h=+mm[1];m=+mm[2];}
+    else if((mm=t.match(/(\d+(?:\.\d+)?)/)))h=parseFloat(mm[1]);
+    else return String(s).trim();
+  }
+  if(/\band half\b/.test(t)&&m===null)m=30;
+  h=h||0;m=m||0;
+  if(h%1){m+=Math.round((h%1)*60);h=Math.floor(h);}
+  h+=Math.floor(m/60);m=m%60;
+  const hs=h?(h+(h===1?'hr':'hrs')):'',ms=m?(m+'min'):'';
+  return [hs,ms].filter(Boolean).join(' ')||'0min';
+}
+function spoken(v){return String(v).replace(/(\d+)hrs?\b/g,(x,n)=>n+(n==='1'?' hour':' hours')).replace(/(\d+)min\b/g,(x,n)=>n+(n==='1'?' minute':' minutes'));}
+function toMinutes(t){const m=String(t).match(/(\d{1,2}):(\d{2})\s*(AM|PM)?/i);if(!m)return null;let h=+m[1];const mi=+m[2];const ap=(m[3]||'').toUpperCase();if(ap==='PM'&&h<12)h+=12;if(ap==='AM'&&h===12)h=0;return h*60+mi;}
+function normalize(f,v){if(!v)return v;if(f.num)return parseNum(v);if(f.dur)return parseDur(v);if(f.time)return parseTime(v);return v.trim();}
+function calcThroughput(r){
+  if(r.thru&&!r.thruAuto)return;
+  const size=parseFloat(r.size),a=toMinutes(r.start),b=toMinutes(r.finish);
+  if(isNaN(size)||a===null||b===null){if(r.thruAuto){r.thru='';r.thruAuto=false;}return;}
+  let d=b-a;if(d<=0)d+=1440;r.thru=(size/(d/60)).toFixed(2);r.thruAuto=true;
+}
+
+/* ---------- row actions ---------- */
+function setStatus(t){$('status').textContent=t;}
+function hasData(r){return FIELDS.some(f=>r[f.k]);}
+function newRow(){cur={date:today()};idx=0;editIdx=null;}
+function findRow(n,anyDate){
+  for(let j=rows.length-1;j>=0;j--){if(String(rows[j].headset)===String(n)&&(anyDate||rows[j].date===today()))return j;}
+  return -1;
+}
+function commitCurrent(){ // saves cur without speaking; returns headset label
+  if(!hasData(cur))return null;
+  if(!cur.date)cur.date=today();
+  calcThroughput(cur);
+  if(editIdx!==null&&rows[editIdx])rows[editIdx]=cur;else rows.push(cur);
+  return cur.headset||'';
+}
+function firstEmptyIdx(r){
+  for(let i=1;i<FIELDS.length-1;i++){const f=FIELDS[i];if(!r[f.k])return i;}
+  return FIELDS.findIndex(f=>f.k==='finish');
+}
+function openRow(j){
+  if(editIdx!==j&&hasData(cur)){const was=editIdx!==null;const hs=commitCurrent();q((was?'Updated':'Saved')+(hs?' headset '+hs:''));
+ }
+  cur=Object.assign({},rows[j]);editIdx=j;idx=firstEmptyIdx(cur);
+  beep([660,990]);
+  q('Headset '+cur.headset+', editing');q(FIELDS[idx].say);
+  setStatus('Editing saved row for headset '+cur.headset+'.');
+}
+function headsetCmd(raw,anyDate){
+  const n=parseNum(raw);if(!/^\d/.test(n)){q('Did not catch the headset number');return;}
+  if(editIdx!==null&&String(cur.headset)===n){q('Already on headset '+n);return;}
+  const j=findRow(n,anyDate);
+  if(j>=0){openRow(j);return;}
+  if(hasData(cur)&&!(editIdx===null&&FIELDS.slice(1).every(f=>!cur[f.k]))){
+    const was=editIdx!==null;const hs=commitCurrent();q((was?'Updated':'Saved')+(hs?' headset '+hs:''));newRow();
+  }
+  cur.headset=n;idx=1;q('Headset '+n+', new');q(FIELDS[idx].say);
+}
+function setValue(v){
+  const f=FIELDS[idx];
+  if(f.k==='headset'){headsetCmd(v,false);return;}
+  cur[f.k]=normalize(f,v);
+  if(f.k==='thru')cur.thruAuto=false;
+  q(spoken(cur[f.k]));
+}
+function goNext(){
+  if(idx>=FIELDS.length-1){saveRow();return;}
+  idx++;q(FIELDS[idx].say);
+}
+function goBack(){if(idx>0)idx--;q(FIELDS[idx].say);}
+function goTo(name){
+  const i=FIELDS.findIndex(f=>f.alias.includes(name));if(i<0)return;
+  idx=i;const v=cur[FIELDS[i].k];q(FIELDS[i].say+(v?', currently '+spoken(v):''));
+}
+function saveRow(){
+  if(!hasData(cur)){setStatus('Nothing to save yet.');q('Nothing to save');return;}
+  const was=editIdx!==null;const hs=commitCurrent();
+  beep([660,880,1320]);
+  setStatus((was?'Updated':'Saved')+' headset '+hs+'.');
+  q((was?'Updated':'Saved')+(hs?' headset '+hs:''));
+  if(cur.thruAuto&&cur.thru)q('Throughput '+cur.thru);
+  newRow();q(FIELDS[idx].say);
+}
+function undo(){
+  if(!rows.length){q('No rows to undo');return;}
+  const r=rows.pop();if(editIdx!==null&&editIdx>=rows.length)newRow();
+  setStatus('Removed headset '+(r.headset||'')+'.');q('Removed headset '+(r.headset||''));
+}
+function readBack(){
+  const parts=FIELDS.filter(f=>cur[f.k]).map(f=>f.say+' '+spoken(cur[f.k]));
+  q(parts.length?parts.join('. '):'This row is empty');
+}
+
+/* ---------- voice commands ---------- */
+const ALIASES=FIELDS.flatMap(f=>f.alias).sort((a,b)=>b.length-a.length).join('|');
+const STOPWORDS='next|skip|back|go to|new row|save|read back|undo|clear';
+const CMD=new RegExp(
+  '\\b(?:(edit|open|find|go to|pull up) )?headset(?: number)? ([a-z0-9.\\- ]+?)(?=\\s+(?:'+STOPWORDS+')\\b|$)'+
+  '|\\bgo to ('+ALIASES+')\\b'+
+  '|\\b(new row|next headset|save row|save|stop listening|read back|repeat|go back|next|skip|back|undo|clear)\\b','g');
+function handle(text){
+  const t=text.toLowerCase().replace(/[?!,]/g,' ').replace(/\s+/g,' ').trim();if(!t)return;
+  let last=0,m,anyCmd=false;CMD.lastIndex=0;
+  const ops=[];
+  while((m=CMD.exec(t))){
+    const before=t.slice(last,m.index).trim();if(before)ops.push({val:before});
+    if(m[2]!==undefined)ops.push({hs:m[2],any:!!m[1]});
+    else if(m[3])ops.push({go:m[3]});
+    else ops.push({cmd:m[4]});
+    last=CMD.lastIndex;anyCmd=true;
+  }
+  const tail=t.slice(last).trim();if(tail)ops.push({val:tail});
+  beep(anyCmd?[880,1175]:[988]);
+  for(const op of ops){
+    if(op.val)setValue(op.val);
+    else if(op.hs!==undefined)headsetCmd(op.hs,op.any);
+    else if(op.go)goTo(op.go);
+    else runCmd(op.cmd);
+  }
+  render();persist();flush();
+}
+function runCmd(c){
+  if(c==='next'||c==='skip')goNext();
+  else if(c==='back'||c==='go back')goBack();
+  else if(c==='clear'){cur[FIELDS[idx].k]='';q('Cleared '+FIELDS[idx].say);}
+  else if(c==='new row'||c==='next headset'||c==='save row'||c==='save')saveRow();
+  else if(c==='undo')undo();
+  else if(c==='read back'||c==='repeat')readBack();
+  else if(c==='stop listening'){stopListening();sayQ=[];}
+}
+
+/* ---------- recognition ---------- */
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+function startRec(){
+  if(!SR||speaking)return;
+  rec=new SR();rec.lang='en-US';rec.continuous=false;rec.interimResults=true;rec.maxAlternatives=1;
+  rec.onstart=()=>micState('live');
+  rec.onresult=e=>{
+    let interim='';
+    for(let i=e.resultIndex;i<e.results.length;i++){const r=e.results[i];
+      if(r.isFinal){$('heard').textContent='Heard: "'+r[0].transcript.trim()+'"';handle(r[0].transcript);}else interim+=r[0].transcript;}
+    if(interim)$('heard').textContent=interim+'…';
+  };
+  rec.onerror=e=>{if(e.error==='not-allowed'||e.error==='service-not-allowed'){listening=false;renderMic();micState('off');
+    showWarn('Microphone access was blocked. Allow the mic for this page in your browser settings.');}};
+  rec.onend=()=>{if(listening&&!speaking){micState('wait');setTimeout(()=>{if(listening&&!speaking)startRec();},150);}};
+  micState('wait');try{rec.start();}catch(e){}
+}
+async function startListening(){
+  if(!SR){showWarn('This browser can\'t do speech recognition. Open the page in Chrome.');return;}
+  listening=true;renderMic();
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();actx.resume();}catch(e){}
+  try{if('wakeLock' in navigator)wakeLock=await navigator.wakeLock.request('screen');}catch(e){}
+  if(settings.speak){q(editIdx!==null?'Editing headset '+cur.headset:'');q(FIELDS[idx].say);flush();}else startRec();
+}
+function stopListening(){
+  listening=false;try{rec&&rec.abort();}catch(e){}
+  try{wakeLock&&wakeLock.release();}catch(e){}wakeLock=null;
+  renderMic();micState('off');setStatus('Mic off.');
+}
+function showWarn(t){const w=$('warn');w.textContent=t;w.style.display='block';}
+
+/* ---------- render ---------- */
+function renderMic(){$('micBtn').classList.toggle('on',listening);$('micLabel').textContent=listening?'Listening — tap to stop':'Start listening';}
+function render(){
+  const f=FIELDS[idx];
+  $('dateBar').textContent='Date: '+(cur.date||today())+' (filled in automatically)';
+  const b=$('badge');b.classList.toggle('edit',editIdx!==null);
+  b.textContent=editIdx!==null?'Editing saved row — headset '+cur.headset:'New headset';
+  $('step').textContent='Field '+(idx+1)+' of '+FIELDS.length+(f.k==='thru'?' (blank = auto-calculated)':'');
+  $('fieldName').textContent=f.label;
+  const v=cur[f.k]||'';const ve=$('value');ve.textContent=v?(v+(f.k==='thru'&&cur.thruAuto?' (auto)':'')):'—';ve.classList.toggle('empty',!v);
+  const chips=$('chips');chips.innerHTML='';
+  FIELDS.forEach((ff,i)=>{const c=document.createElement('button');c.className='chip'+(i===idx?' cur':'')+(cur[ff.k]?' filled':'');
+    c.textContent=ff.label;c.onclick=()=>{idx=i;render();persist();};chips.appendChild(c);});
+  $('count').textContent=rows.length+(rows.length===1?' row':' rows');
+  const tb=$('table');
+  if(!rows.length){tb.innerHTML='<tr><td class="empty-note">Saved headsets show up here. Say "save" after filling one in.</td></tr>';return;}
+  let h='<thead><tr>'+COLS.map(c=>'<th>'+c.label+'</th>').join('')+'<th></th></tr></thead><tbody>';
+  rows.forEach((r,ri)=>{h+='<tr'+(ri===editIdx?' class="editing"':'')+'>'+COLS.map(c=>'<td>'+esc(r[c.k]||'')+'</td>').join('')+
+    '<td class="act"><button data-edit="'+ri+'">Edit</button><button data-del="'+ri+'">Delete</button></td></tr>';});
+  tb.innerHTML=h+'</tbody>';
+  tb.querySelectorAll('button[data-edit]').forEach(x=>x.onclick=()=>{openRow(+x.dataset.edit);render();persist();flush();});
+  tb.querySelectorAll('button[data-del]').forEach(x=>x.onclick=()=>{const d=+x.dataset.del;rows.splice(d,1);
+    if(editIdx===d)newRow();else if(editIdx!==null&&editIdx>d)editIdx--;render();persist();});
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+
+/* ---------- export ---------- */
+function tsv(){
+  const lines=[];if(settings.header)lines.push(COLS.map(c=>c.label).join('\t'));
+  rows.forEach(r=>lines.push(COLS.map(c=>String(r[c.k]||'').replace(/\t|\n/g,' ')).join('\t')));
+  return lines.join('\n');
+}
+async function copyRows(){
+  if(!rows.length){setStatus('No saved rows to copy.');return;}
+  const text=tsv();
+  try{await navigator.clipboard.writeText(text);setStatus('Copied '+rows.length+' rows. Paste into cell A1 of your sheet.');$('fallback').style.display='none';return;}catch(e){}
+  const ta=$('fallback');ta.value=text;ta.style.display='block';ta.focus();ta.select();
+  try{document.execCommand('copy');setStatus('Copied. Paste into your sheet.');}catch(e){setStatus('Select all the text below and copy it.');}
+}
+
+/* ---------- wire up ---------- */
+load();
+if(!cur||!Object.keys(cur).length)newRow();
+if(!cur.date)cur.date=today();
+$('speakTog').checked=settings.speak;$('beepTog').checked=settings.beep;$('headerTog').checked=settings.header;
+$('speakTog').onchange=e=>{settings.speak=e.target.checked;persist();};
+$('beepTog').onchange=e=>{settings.beep=e.target.checked;persist();};
+$('headerTog').onchange=e=>{settings.header=e.target.checked;persist();};
+$('micBtn').onclick=()=>listening?stopListening():startListening();
+$('nextBtn').onclick=()=>{goNext();render();persist();flush();};
+$('backBtn').onclick=()=>{goBack();render();persist();flush();};
+$('saveBtn').onclick=()=>{saveRow();render();persist();flush();};
+$('copyBtn').onclick=copyRows;
+$('clearAllBtn').onclick=()=>{if(confirm('Delete all saved rows?')){rows=[];newRow();render();persist();}};
+document.addEventListener('visibilitychange',async()=>{if(document.visibilityState==='visible'&&listening){try{wakeLock=await navigator.wakeLock.request('screen');}catch(e){}}});
+if(!SR)showWarn('This browser can\'t do speech recognition. Open the page in Chrome.');
+renderMic();render();persist();
+</script>
+</body>
+</html>
