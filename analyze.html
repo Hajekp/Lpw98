@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Upload analyzer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{
+  --bg:#EEF1F4; --panel:#FFFFFF; --ink:#1C2A3A; --muted:#5B6B7C; --line:#D3DAE2;
+  --accent:#2F5BEA; --accent-ink:#FFFFFF; --bar:#B9C6D8; --ok:#1E8A5A; --warn:#B07F00; --chip:#E2E8EF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141B24; --panel:#1D2631; --ink:#E7EDF3; --muted:#9AA9B8; --line:#2E3A48;
+    --accent:#6F8FFF; --accent-ink:#0E1420; --bar:#3A4A5E; --ok:#4FCB8F; --warn:#E0B341; --chip:#273240;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141B24; --panel:#1D2631; --ink:#E7EDF3; --muted:#9AA9B8; --line:#2E3A48;
+  --accent:#6F8FFF; --accent-ink:#0E1420; --bar:#3A4A5E; --ok:#4FCB8F; --warn:#E0B341; --chip:#273240;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:17px;line-height:1.45}
+main{max-width:720px;margin:0 auto;padding:16px 16px 48px}
+h1{font-size:1.4rem;margin:4px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px}
+h2{font-size:1.1rem;margin:28px 0 8px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+textarea{width:100%;min-height:140px;font:inherit;font-size:.85rem;border-radius:10px;border:1px solid var(--line);
+  background:var(--bg);color:var(--ink);padding:10px;resize:vertical}
+textarea.small{min-height:70px}
+label.lbl{font-weight:700;display:block;margin-bottom:6px}
+.hint{color:var(--muted);font-size:.88rem;margin:6px 0 0}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:12px}
+button,.filebtn{font:inherit;cursor:pointer;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);
+  padding:11px 14px;min-height:46px;display:inline-flex;align-items:center}
+button:focus-visible,.filebtn:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);color:var(--accent-ink);border:none;font-weight:700}
+.filebtn input{position:absolute;opacity:0;width:1px;height:1px}
+details{margin-top:12px}
+summary{cursor:pointer;font-weight:700}
+.answer{margin:24px 0 4px}
+.answer .big{font-size:clamp(2rem,8vw,3rem);font-weight:700;line-height:1.05;margin:0}
+.answer .big b{color:var(--accent)}
+.answer p{color:var(--muted);margin:10px 0 0;max-width:60ch}
+.chartwrap{overflow-x:auto}
+svg text{font-family:inherit}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;width:100%;font-size:.92rem;white-space:nowrap}
+th,td{padding:9px 12px;border-bottom:1px solid var(--line);text-align:right}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--muted);font-weight:700}
+tr.rec td{background:color-mix(in srgb,var(--accent) 14%,transparent);font-weight:700}
+.few{color:var(--warn);font-size:.8rem;font-weight:400}
+ul.notes{margin:0;padding-left:20px}
+ul.notes li{margin:4px 0}
+.err{color:var(--warn);font-weight:700;margin-top:10px}
+.empty{color:var(--muted)}
+</style>
+</head>
+<body>
+<main>
+  <h1>Upload analyzer</h1>
+  <p class="sub">Find how many headsets to upload at once. Paste or upload your logged rows, and it works out the speed at each level.</p>
+
+  <section class="panel">
+    <label class="lbl" for="data">Your upload data</label>
+    <textarea id="data" placeholder="Paste rows from the logger's copy button or from Google Sheets"></textarea>
+    <p class="hint">Needs Headset #, Data size, Upload start and Est. upload finish. Date helps when uploads run past midnight or span several days. Excel files can have a tab per date; an issues tab is ignored.</p>
+    <details>
+      <summary>Add issue notes (optional)</summary>
+      <textarea class="small" id="issues" placeholder="Paste rows from the logger's Copy issues button" style="margin-top:8px"></textarea>
+      <p class="hint">Used to check whether problems go up when more headsets upload at once.</p>
+    </details>
+    <div class="row">
+      <button class="primary" id="go">Analyze</button>
+      <label class="filebtn">Upload a file<input type="file" id="file" accept=".csv,.tsv,.txt,.xlsx,.xls"></label>
+      <button id="sample">Try sample data</button>
+    </div>
+    <div class="hint" id="fileMsg"></div>
+    <div class="err" id="err" role="alert"></div>
+  </section>
+
+  <div id="out"></div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const KEY='uploadAnalyzer.v1';
+
+/* ---------- parsing ---------- */
+function parseDelimited(text){
+  const lines=text.replace(/\r/g,'').split('\n').filter(l=>l.trim());
+  if(!lines.length)return [];
+  const tab=lines[0].includes('\t');
+  if(tab)return lines.map(l=>l.split('\t'));
+  // CSV with quotes
+  return lines.map(l=>{const out=[];let cur='',q=false;
+    for(let i=0;i<l.length;i++){const c=l[i];
+      if(q){if(c==='"'&&l[i+1]==='"'){cur+='"';i++;}else if(c==='"')q=false;else cur+=c;}
+      else if(c==='"')q=true;else if(c===','){out.push(cur);cur='';}else cur+=c;}
+    out.push(cur);return out;});
+}
+const LOGGER_ORDER=['date','headset','episodes','size','hours','start','finish'];
+function findHeaderRow(rows){ // header may sit below a title row or two
+  for(let i=0;i<Math.min(rows.length,15);i++)if(rows[i].some(c=>/headset/i.test(String(c))&&!/total/i.test(String(c))))return i;
+  return -1;
+}
+function colIndex(head){
+  const h=head.map(x=>String(x).trim().toLowerCase());
+  const find=re=>h.findIndex(x=>re.test(x)&&!/total/.test(x));
+  return {date:find(/^date/),headset:find(/headset/),size:find(/size/),start:find(/start/),finish:find(/finish|end/),issues:find(/issue|note/)};
+}
+function mapColumns(rows){
+  const hi=findHeaderRow(rows);
+  if(hi<0){const m={issues:-1};LOGGER_ORDER.forEach((k,i)=>m[k]=i);return {map:m,body:rows};}
+  return {map:colIndex(rows[hi]),body:rows.slice(hi+1)};
+}
+function toMin(t){
+  const m=String(t||'').match(/(\d{1,2}):(\d{2})(?::\d{2})?\s*([AaPp])?\.?\s*[Mm]?/);if(!m)return null;
+  let h=+m[1];const mi=+m[2];const ap=(m[3]||'').toUpperCase();
+  if(ap==='P'&&h<12)h+=12;if(ap==='A'&&h===12)h=0;
+  return {min:h*60+mi,hasAP:!!ap};
+}
+function durMinutes(s,f){ // same rules as the logger
+  const a=toMin(s),b=toMin(f);if(!a||!b)return null;
+  const opts=x=>x.hasAP?[x.min]:[x.min%720,x.min%720+720];
+  let d=Infinity,startMin=a.min;
+  for(const x of opts(a))for(const y of opts(b)){let k=y-x;if(k<0)k+=1440;if(k<d){d=k;startMin=x;}}
+  return {d,startMin};
+}
+const MONTHS={jan:0,feb:1,mar:2,apr:3,may:4,jun:5,jul:6,aug:7,sep:8,oct:9,nov:10,dec:11};
+function dayMs(s){
+  s=String(s||'').trim().toLowerCase();let m;const yr=v=>v===undefined?new Date().getFullYear():(+v<100?2000+ +v:+v);
+  if((m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)))return new Date(+m[1],+m[2]-1,+m[3]).getTime();
+  if((m=s.match(/^(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?(?!\d)/)))return new Date(yr(m[3]),+m[1]-1,+m[2]).getTime();
+  if((m=s.match(/^([a-z]{3})[a-z]*\.?\s+(\d{1,2})(?:st|nd|rd|th)?(?:,?\s+(\d{2,4}))?/))&&m[1] in MONTHS)return new Date(yr(m[3]),MONTHS[m[1]],+m[2]).getTime();
+  if((m=s.match(/^(\d{1,2})[\s\-]([a-z]{3})[a-z]*(?:[\s\-,]+(\d{2,4}))?/))&&m[2] in MONTHS)return new Date(yr(m[3]),MONTHS[m[2]],+m[1]).getTime();
+  return null;
+}
+function fmtDate(ms){const d=new Date(ms);return (d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();}
+function sheetDate(name){ // a date anywhere in a tab name, like "10-17" or "Oct 17 uploads"
+  const n=String(name);let ms=dayMs(n);
+  if(ms===null){const m=n.match(/\d{1,2}[\/\-.]\d{1,2}(?:[\/\-.]\d{2,4})?|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2}(?:,?\s+\d{2,4})?/i);if(m)ms=dayMs(m[0]);}
+  return ms===null?'':fmtDate(ms);
+}
+function readUploads(text){
+  const rows=parseDelimited(text);if(!rows.length)return {err:'Paste some rows first.'};
+  const {map,body}=mapColumns(rows);
+  if(map.headset<0||map.size<0||map.start<0||map.finish<0)
+    return {err:'Couldn\'t find the Headset #, Data size, Upload start and Est. upload finish columns. Include the header row when you copy.'};
+  const ups=[],skipped={noFinish:0,zero:0,noSize:0},seen=new Set();let noDate=0;
+  body.forEach(r=>{
+    const hs=String(r[map.headset]||'').trim();if(!hs||/headset/i.test(hs))return; // skip blanks and repeated header rows
+    const size=parseFloat(String(r[map.size]||'').replace(/[^\d.]/g,''));
+    const s=r[map.start],f=r[map.finish];
+    if(!toMin(s)||!toMin(f)){skipped.noFinish++;return;}
+    if(!(size>0)){skipped.noSize++;return;}
+    const dm=durMinutes(s,f);if(!dm||dm.d===0){skipped.zero++;return;}
+    let base=map.date>=0?dayMs(r[map.date]):null;if(base===null){noDate++;base=0;}
+    const start=base+dm.startMin*60000,end=start+dm.d*60000;
+    const date=map.date>=0?String(r[map.date]||'').trim():'';
+    const key=date+'|'+hs+'|'+start;if(seen.has(key))return;seen.add(key);
+    ups.push({hs,date,size,start,end,hours:dm.d/60,rate:size/(dm.d/60),issues:map.issues>=0?String(r[map.issues]||'').trim():''});
+  });
+  return {ups,skipped,noDate};
+}
+function attachIssues(ups,text){
+  if(!text.trim())return 0;
+  let rows=parseDelimited(text);if(!rows.length)return 0;
+  const hr=findHeaderRow(rows),hasHeader=hr>=0,c=hasHeader?colIndex(rows[hr]):null;
+  const di=hasHeader?c.date:0,hi=hasHeader?c.headset:1,ii=hasHeader?c.issues:2;
+  if(hasHeader)rows=rows.slice(hr);
+  let n=0;
+  (hasHeader?rows.slice(1):rows).forEach(r=>{
+    const hs=String(r[hi]||'').trim(),d=String(r[di]||'').trim(),note=String(r[ii]||'').trim();if(!hs||!note)return;
+    const u=ups.find(x=>x.hs===hs&&(!x.date||!d||x.date===d));if(u){u.issues=u.issues?u.issues+'; '+note:note;n++;}
+  });
+  return n;
+}
+
+/* ---------- analysis ---------- */
+function analyze(ups){
+  // 1. Slice time at every start/finish and record, for each upload, how long it
+  //    spent at each level (number of headsets uploading at once).
+  const pts=[...new Set(ups.flatMap(u=>[u.start,u.end]))].sort((a,b)=>a-b);
+  const timeAt={};let K=0;
+  ups.forEach(u=>u.t={});
+  for(let i=0;i<pts.length-1;i++){
+    const t1=pts[i],t2=pts[i+1],h=(t2-t1)/3600000;
+    const act=ups.filter(u=>u.start<=t1&&u.end>=t2);
+    const k=act.length;if(!k)continue;
+    K=Math.max(K,k);timeAt[k]=(timeAt[k]||0)+h;
+    act.forEach(u=>u.t[k]=(u.t[k]||0)+h);
+  }
+  // 2. Each upload's data size = sum over levels of (speed at that level x time at that level).
+  //    Solve for the per-headset speed at every level from all uploads together
+  //    (non-negative least squares, each upload weighted equally).
+  const G=Array.from({length:K+1},()=>new Array(K+1).fill(0)),b=new Array(K+1).fill(0);
+  ups.forEach(u=>{
+    const a=new Array(K+1).fill(0);for(const k in u.t)a[k]=u.t[k]/u.size;
+    for(let i=1;i<=K;i++){if(!a[i])continue;b[i]+=a[i];for(let j=1;j<=K;j++)G[i][j]+=a[i]*a[j];}
+  });
+  const overall=ups.reduce((s,u)=>s+u.size,0)/ups.reduce((s,u)=>s+u.hours,0);
+  let diag=0,nd=0;for(let i=1;i<=K;i++)if(G[i][i]){diag+=G[i][i];nd++;}
+  const lam=nd?1e-3*diag/nd:0; // tiny pull toward the overall average keeps thin levels stable
+  const r=new Array(K+1).fill(overall);
+  for(let it=0;it<3000;it++){
+    let change=0;
+    for(let k=1;k<=K;k++){
+      if(!G[k][k])continue;
+      let sum=b[k]+lam*overall;for(let j=1;j<=K;j++)if(j!==k)sum-=G[k][j]*r[j];
+      const v=Math.max(0,sum/(G[k][k]+lam));change=Math.max(change,Math.abs(v-r[k]));r[k]=v;
+    }
+    if(change<1e-10)break;
+  }
+  // 3. Summaries per level.
+  const list=[];
+  for(let k=1;k<=K;k++){
+    if(!timeAt[k])continue;
+    const inv=ups.filter(u=>u.t[k]);
+    const exposure=inv.reduce((s,u)=>s+u.t[k],0); // headset-hours spent at this level
+    const eff=inv.reduce((s,u)=>s+u.t[k]/u.hours,0); // uploads' worth of time at this level
+    const main=ups.filter(u=>mainLevel(u)===k);
+    list.push({k,n:inv.length,exposure,eff,per:r[k],total:r[k]*k,time:timeAt[k],nMain:main.length,iss:main.filter(u=>u.issues).length});
+  }
+  const solid=list.filter(L=>L.n>=2&&L.exposure>=0.5&&L.eff>=1.5);
+  let rec=null,best=null;
+  if(solid.length>=2){
+    best=solid.reduce((a,b)=>b.total>a.total?b:a);
+    // fastest overall; levels within 3% of the best are a tie (measurement noise), so take the fewest headsets among them
+    rec=solid.find(L=>L.total>=best.total*0.97);
+  }
+  const alt=rec?solid.find(L=>L.k<rec.k&&L.total>=rec.total*0.95):null; // nearly as fast with fewer headsets
+  const ties=rec?solid.filter(L=>L.total>=best.total*0.97):[];
+  return {list,solid,rec,best,alt,ties};
+}
+function mainLevel(u){let bk=1,bv=-1;for(const k in u.t)if(u.t[k]>bv){bv=u.t[k];bk=+k;}return bk;}
+
+/* ---------- output ---------- */
+const f1=x=>(Math.round(x*10)/10).toFixed(1);
+const pct=x=>Math.round(x*100)+'%';
+function hrs(h){const m=Math.round(h*60);const H=Math.floor(m/60),M=m%60;return [H?H+(H===1?'hr':'hrs'):'',M?M+'min':''].filter(Boolean).join(' ')||'0min';}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function chart(res){
+  const list=res.list;if(!list.length)return '';
+  const W=640,H=300,padL=16,padB=64,padT=34,padR=16;
+  const max=Math.max(1,...list.map(L=>L.total));
+  const bw=(W-padL-padR)/list.length;
+  const y=v=>padT+(H-padT-padB)*(1-v/max);
+  let s=`<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Total upload speed in GB per hour for each number of headsets uploading at once">`;
+  s+=`<line x1="${padL}" x2="${W-padR}" y1="${H-padB}" y2="${H-padB}" stroke="var(--line)" stroke-width="2"/>`;
+  list.forEach((L,i)=>{
+    const thin=!res.solid.includes(L),isRec=res.rec&&L.k===res.rec.k;
+    const x=padL+i*bw+bw*0.15,w=bw*0.7,top=thin?y(0)-4:y(L.total);
+    s+=`<rect x="${x}" y="${top}" width="${w}" height="${H-padB-top}" rx="8" fill="${isRec?'var(--accent)':'var(--bar)'}" ${thin?'opacity=".45"':''}/>`;
+    s+=`<text x="${x+w/2}" y="${top-10}" text-anchor="middle" font-size="22" font-weight="700" fill="var(--ink)">${thin?'—':f1(L.total)}</text>`;
+    s+=`<text x="${x+w/2}" y="${H-padB+28}" text-anchor="middle" font-size="22" fill="var(--ink)">${L.k}</text>`;
+  });
+  s+=`<text x="${W/2}" y="${H-8}" text-anchor="middle" font-size="18" fill="var(--muted)">Headsets uploading at once</text></svg>`;
+  return s;
+}
+function render(res,info){
+  const {list,solid,rec,best}=res;let h='';
+  const anyIssP=list.some(L=>L.iss);
+  const N=info.planN,S=info.planS;
+  const est=L=>hrs(N*S/L.total);
+  if(rec){
+    let more='';
+    if(!solid.some(L=>L.k>rec.k))more=` That's the most you tried, and it was still speeding up, so try a round with ${rec.k+1} at once to see if it's faster still.`;
+    else{
+      const t=res.ties;
+      more=t.length>1
+        ?` ${t.map(L=>L.k).join(', ').replace(/, ([^,]*)$/,' and $1')} at once were all about equally fast (within 3%), so ${rec.k} gets there just as quickly with the fewest headsets. Going higher only makes each headset take longer.`
+        :` Going above ${rec.k} didn't make the total faster; each headset just took longer.`;
+    }
+    const one=solid.find(L=>L.k===1);
+    h+=`<section class="answer"><p class="big">Upload <b>${rec.k}</b> at a time</p>
+      <p>That was the fastest overall: ${f1(rec.total)} GB per hour in total. ${N} headsets of about ${f1(S)} GB would take about ${est(rec)}${one&&one!==rec?`, compared with ${est(one)} one at a time`:''}.${more}</p>
+      ${res.alt?`<p>${res.alt.k} at once was nearly as fast (${pct(res.alt.total/rec.total)} of the speed, about ${est(res.alt)}) with fewer headsets to keep track of.</p>`:''}</section>`;
+  }else{
+    h+=`<section class="answer"><p class="big">Not enough to compare yet</p>
+      <p>${solid.length===1?`All your usable uploads ran at about ${solid[0].k} at once.`:'Each level needs at least 2 uploads.'} Log a few rounds at different numbers of headsets at once (for example 2, 3 and 4) and analyze again.</p></section>`;
+  }
+  h+=`<h2>Total GB per hour by headsets at once</h2><div class="panel chartwrap">${chart(res)}</div>
+    <p class="hint">Taller is faster. Faded bars don't have enough upload time behind them yet.</p>`;
+  h+=`<h2>Details</h2><p class="hint" style="margin:0 0 8px">Time estimates for <input id="planN" type="number" min="1" value="${N}" style="width:4.5em;font:inherit;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)"> headsets of about <input id="planS" type="number" min="0.1" step="0.1" value="${f1(S)}" style="width:4.5em;font:inherit;padding:4px 6px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--ink)"> GB each. They don't include time spent swapping headsets.</p>`;
+  const anyIss=list.some(L=>L.iss);
+  h+=`<div class="tablewrap"><table><thead><tr><th>At once</th><th>Time for all</th><th>Total</th><th>Each headset</th><th>Uploads involved</th><th>Time at this level</th>${anyIss?'<th>With issues</th>':''}</tr></thead><tbody>`;
+  list.forEach(L=>{h+=`<tr class="${rec&&L.k===rec.k?'rec':''}"><td>${L.k}</td><td>${res.solid.includes(L)?est(L):'—'}</td><td>${res.solid.includes(L)?f1(L.total)+' GB/hr':'—'}</td><td>${res.solid.includes(L)?f1(L.per)+' GB/hr':'—'}</td><td>${L.n}${!res.solid.includes(L)?' <span class="few">thin</span>':L.n<3?' <span class="few">few</span>':''}</td><td>${hrs(L.time)}</td>${anyIss?`<td>${L.nMain?pct(L.iss/L.nMain):'—'}</td>`:''}</tr>`;});
+  h+=`</tbody></table></div>`;
+  if(anyIss){
+    const lo=list[0],hi=list[list.length-1];
+    if(list.length>1&&lo.nMain>=3&&hi.nMain>=3&&hi.iss/hi.nMain>lo.iss/lo.nMain+0.15)h+=`<p class="hint">Issues show up more often at higher levels (${pct(lo.iss/lo.nMain)} at ${lo.k} vs ${pct(hi.iss/hi.nMain)} at ${hi.k}). That's worth weighing alongside speed.</p>`;
+  }
+  const notes=[];
+  notes.push(`Used ${info.ups} upload${info.ups===1?'':'s'}.`);
+  if(info.skipped.noFinish)notes.push(`Skipped ${info.skipped.noFinish} without both an upload start and finish time (probably still uploading).`);
+  if(info.skipped.zero)notes.push(`Skipped ${info.skipped.zero} where start and finish were the same minute.`);
+  if(info.skipped.noSize)notes.push(`Skipped ${info.skipped.noSize} with no data size.`);
+  if(info.noDate)notes.push(`${info.noDate} row${info.noDate===1?' has':'s have'} no date, so ${info.noDate===1?'it\'s':'they\'re'} treated as the same day.`);
+  if(info.issues)notes.push(`Matched ${info.issues} issue note${info.issues===1?'':'s'} to uploads.`);
+  notes.push('The number uploading at once can change during an upload. Each upload\'s time is split across every level it ran at, and the speed at each level is worked out from all uploads together.');
+  notes.push('Speeds are only as accurate as the finish times, so say "now" right when each upload actually finishes.');
+  h+=`<h2>Notes</h2><div class="panel"><ul class="notes">${notes.map(n=>'<li>'+esc(n)+'</li>').join('')}</ul></div>`;
+  $('out').innerHTML=h;
+  const re=()=>{const n=+$('planN').value,sz=+$('planS').value;if(n>0&&sz>0){info.planN=Math.round(n);info.planS=sz;render(res,info);$('planN').focus();}};
+  $('planN').onchange=re;$('planS').onchange=re;
+}
+function run(noScroll){
+  $('err').textContent='';
+  const text=$('data').value;
+  try{localStorage.setItem(KEY,JSON.stringify({data:text,issues:$('issues').value}));}catch(e){}
+  const r=readUploads(text);
+  if(r.err){$('err').textContent=r.err;$('out').innerHTML='';return;}
+  if(!r.ups.length){$('err').textContent='None of the rows have a data size plus both upload times, so there\'s nothing to measure yet.';$('out').innerHTML='';return;}
+  const issues=attachIssues(r.ups,$('issues').value);
+  const avgS=r.ups.reduce((t,u)=>t+u.size,0)/r.ups.length;
+  render(analyze(r.ups),{ups:r.ups.length,skipped:r.skipped,noDate:r.noDate,issues,planN:r.ups.length,planS:avgS});
+  if(!noScroll)$('out').scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'start'});
+}
+
+/* ---------- sample data ---------- */
+function sample(){
+  const fmt=m=>{m=((m%1440)+1440)%1440;let h=Math.floor(m/60);const mi=m%60,ap=h>=12?'PM':'AM';h=h%12||12;return h+':'+String(mi).padStart(2,'0')+' '+ap;};
+  const d=new Date();const date=(d.getMonth()+1)+'/'+d.getDate()+'/'+d.getFullYear();
+  const lines=['Date\tHeadset #\tEpisode count\tData size (GB)\tHours of data\tUpload start\tEst. upload finish'];
+  let t=9*60,hs=1,seed=7;const rnd=()=>{seed=(seed*9301+49297)%233280;return seed/233280;};
+  [1,1,2,2,3,3,4,4,5,5].forEach(k=>{
+    let roundEnd=t;
+    for(let i=0;i<k;i++){
+      const size=Math.round((11+rnd()*2)*10)/10,rate=Math.min(9,25/k)*(0.95+rnd()*0.1);
+      const dur=Math.round(size/rate*60);
+      lines.push([date,hs++,Math.round(30+rnd()*40),size,'',fmt(t),fmt(t+dur)].join('\t'));
+      roundEnd=Math.max(roundEnd,t+dur);
+    }
+    t=roundEnd+10;
+  });
+  $('data').value=lines.join('\n');$('issues').value='';run();
+}
+
+/* ---------- file upload ---------- */
+// Reads every tab: upload tabs (one per date, for example) are combined, and an
+// issue tracker tab (Date, Headset #, Issues) is picked up automatically.
+function readWorkbook(wb){
+  const data=['Date\tHeadset #\tData size (GB)\tUpload start\tEst. upload finish\tIssues'],iss=['Date\tHeadset #\tIssues'];
+  const used=[],issTabs=[],skipped=[];let dataRows=0,issueRows=0;
+  const clean=v=>String(v==null?'':v).replace(/[\t\n\r]+/g,' ').trim();
+  wb.SheetNames.forEach(name=>{
+    const rows=XLSX.utils.sheet_to_json(wb.Sheets[name],{header:1,raw:false,defval:''});
+    const hr=findHeaderRow(rows);if(hr<0){skipped.push(name);return;}
+    const c=colIndex(rows[hr]),tabDate=sheetDate(name);
+    const body=rows.slice(hr+1).filter(r=>clean(r[c.headset])&&!/headset/i.test(clean(r[c.headset])));
+    const dateOf=r=>(c.date>=0&&clean(r[c.date]))||tabDate;
+    if(c.size>=0&&c.start>=0&&c.finish>=0){
+      body.forEach(r=>{data.push([dateOf(r),clean(r[c.headset]),clean(r[c.size]),clean(r[c.start]),clean(r[c.finish]),c.issues>=0?clean(r[c.issues]):''].join('\t'));dataRows++;});
+      used.push(name);
+    }else if(c.issues>=0)issTabs.push(name); // issue tracker tabs are ignored
+    else skipped.push(name);
+  });
+  let msg='Read '+used.length+(used.length===1?' tab':' tabs')+' of upload data ('+dataRows+' rows)';
+  msg+='.';if(issTabs.length)msg+=' Ignored '+issTabs.join(', ')+' (issues).';if(skipped.length)msg+=' Skipped '+skipped.join(', ')+' (no upload columns).';
+  return {data:data.join('\n'),issues:iss.join('\n'),dataRows,issueRows,msg,skipped};
+}
+$('file').onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;$('err').textContent='';
+  try{
+    if(/\.xlsx?$/i.test(f.name)){
+      if(!window.XLSX){$('err').textContent='Couldn\'t load the Excel reader. Export the sheet as CSV instead.';return;}
+      const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});
+      const r=readWorkbook(wb);
+      if(!r.dataRows){$('err').textContent='None of the tabs have Headset #, Data size, Upload start and Est. upload finish columns.'+(r.skipped.length?' Tabs checked: '+r.skipped.join(', ')+'.':'');return;}
+      $('data').value=r.data;
+      $('fileMsg').textContent=r.msg;
+    }else{$('data').value=await f.text();$('fileMsg').textContent='';}
+    run();
+  }catch(err){$('err').textContent='Couldn\'t read that file. Try exporting it from Google Sheets as CSV.';}
+  e.target.value='';
+};
+$('go').onclick=()=>run();
+$('sample').onclick=sample;
+try{const s=JSON.parse(localStorage.getItem(KEY)||'null');if(s){$('data').value=s.data||'';$('issues').value=s.issues||'';if(s.data)run(true);}}catch(e){}
+</script>
+</body>
+</html>
