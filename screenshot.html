@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Screenshot to sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/tesseract.min.js"></script>
+<style>
+:root{
+  --bg:#EEF1F4; --panel:#FFFFFF; --ink:#1C2A3A; --muted:#5B6B7C; --line:#D3DAE2;
+  --accent:#2F5BEA; --accent-ink:#FFFFFF; --ok:#1E8A5A; --warn:#B07F00; --warnbg:#FFF4D6; --chip:#E2E8EF;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#141B24; --panel:#1D2631; --ink:#E7EDF3; --muted:#9AA9B8; --line:#2E3A48;
+    --accent:#6F8FFF; --accent-ink:#0E1420; --ok:#4FCB8F; --warn:#E0B341; --warnbg:#3A3020; --chip:#273240;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#141B24; --panel:#1D2631; --ink:#E7EDF3; --muted:#9AA9B8; --line:#2E3A48;
+  --accent:#6F8FFF; --accent-ink:#0E1420; --ok:#4FCB8F; --warn:#E0B341; --warnbg:#3A3020; --chip:#273240;
+}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:17px;line-height:1.45}
+main{max-width:760px;margin:0 auto;padding:16px 16px 48px}
+h1{font-size:1.4rem;margin:4px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px}
+h2{font-size:1.1rem;margin:24px 0 8px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+.drop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;text-align:center;
+  border:2px dashed var(--line);border-radius:14px;padding:22px 14px;cursor:pointer;min-height:140px}
+.drop.has{padding:8px;border-style:solid}
+.drop img{max-width:100%;max-height:340px;border-radius:8px;display:block}
+.drop b{font-size:1.05rem}
+.drop span{color:var(--muted);font-size:.9rem}
+.drop input{position:absolute;opacity:0;width:1px;height:1px}
+label.tog{display:flex;align-items:flex-start;gap:10px;margin-top:12px}
+label.tog input{width:22px;height:22px;margin-top:2px;flex:none}
+.row{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+button{font:inherit;cursor:pointer;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:11px 14px;min-height:46px}
+button:focus-visible,.drop:focus-within{outline:3px solid var(--accent);outline-offset:2px}
+button:disabled{opacity:.5;cursor:default}
+.primary{background:var(--accent);color:var(--accent-ink);border:none;font-weight:700}
+.bar{height:8px;border-radius:4px;background:var(--chip);overflow:hidden;margin-top:12px;display:none}
+.bar i{display:block;height:100%;width:0;background:var(--accent);transition:width .2s}
+.status{color:var(--muted);font-size:.92rem;margin-top:8px;min-height:1.3em}
+.err{color:var(--warn);font-weight:700}
+.tablewrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:14px}
+table{border-collapse:collapse;font-size:.92rem;white-space:nowrap;min-width:100%}
+td{border:1px solid var(--line);padding:6px 9px;min-width:3em}
+td:focus{outline:2px solid var(--accent);outline-offset:-2px}
+td.low{background:var(--warnbg)}
+.hint{color:var(--muted);font-size:.88rem;margin:8px 0 0}
+.legend i{display:inline-block;width:14px;height:12px;border-radius:3px;background:var(--warnbg);border:1px solid var(--line);vertical-align:middle;margin-right:6px}
+</style>
+</head>
+<body>
+<main>
+  <h1>Screenshot to sheet</h1>
+  <p class="sub">Turn a screenshot of a spreadsheet back into rows you can paste into Google Sheets. It reads the image on your phone; nothing is uploaded.</p>
+
+  <section class="panel">
+    <label class="drop" id="drop">
+      <input type="file" id="file" accept="image/*">
+      <b>Choose a screenshot</b>
+      <span>PNG or JPG. Crop it to just the cells for the best result.</span>
+    </label>
+    <label class="tog"><input type="checkbox" id="trim" checked><span>Leave out the row numbers and column letters (1, 2, 3 and A, B, C) if they're in the picture</span></label>
+    <label class="tog"><input type="checkbox" id="fix" checked><span>Fix common misreads in numbers and times (O for 0, l for 1, "AN" for AM)</span></label>
+    <div class="row"><button class="primary" id="go" disabled>Read the screenshot</button></div>
+    <div class="bar" id="bar"><i id="barFill"></i></div>
+    <div class="status" id="status" role="status"></div>
+  </section>
+
+  <div id="result" hidden>
+    <h2 id="resTitle">Rows found</h2>
+    <div class="tablewrap"><table id="grid"></table></div>
+    <p class="hint"><span class="legend"><i></i></span>Shaded cells were hard to read, so check them against the screenshot. Tap any cell to fix it.</p>
+    <div class="row">
+      <button class="primary" id="copyOpen">Copy &amp; open Google Sheets</button>
+      <button id="copyOnly">Copy only</button>
+    </div>
+    <div class="status" id="copyMsg" role="status"></div>
+  </div>
+</main>
+
+<script>
+const $=id=>document.getElementById(id);
+const CDN={worker:'https://cdn.jsdelivr.net/npm/tesseract.js@7.0.0/dist/worker.min.js',
+  core:'https://cdn.jsdelivr.net/npm/tesseract.js-core@7.0.0',
+  lang:'https://cdn.jsdelivr.net/npm/@tesseract.js-data/eng@1.0.0/4.0.0_best_int'};
+let img=null,worker=null,matrix=[],lowConf=[];
+const CELL_H=56,CELL_PSM='7';
+
+/* ---------- picking the image ---------- */
+function setImage(file){
+  if(!file||!/^image\//.test(file.type)){setStatus('That isn\'t an image. Pick a PNG or JPG screenshot.',true);return;}
+  const url=URL.createObjectURL(file);const im=new Image();
+  im.onload=()=>{img=im;const d=$('drop');d.classList.add('has');d.querySelectorAll('img,b,span').forEach(n=>n.remove());
+    const show=new Image();show.src=url;show.alt='Your screenshot';d.appendChild(show);$('go').disabled=false;setStatus('Ready. Tap "Read the screenshot."');};
+  im.onerror=()=>setStatus('Couldn\'t open that image.',true);
+  im.src=url;
+}
+$('file').onchange=e=>setImage(e.target.files[0]);
+document.addEventListener('paste',e=>{const it=[...(e.clipboardData||{}).items||[]].find(i=>i.type.startsWith('image/'));if(it)setImage(it.getAsFile());});
+function setStatus(t,bad){const s=$('status');s.textContent=t;s.className='status'+(bad?' err':'');}
+function setBar(p){const b=$('bar');b.style.display=p==null?'none':'block';$('barFill').style.width=Math.round((p||0)*100)+'%';}
+
+/* ---------- image prep: scale up, grayscale, flip dark mode ---------- */
+// How tilted is the picture? Try small angles and keep the one where rows of text line up best.
+function skewAngle(im){
+  const sw=Math.min(700,im.naturalWidth),sh=Math.round(im.naturalHeight*sw/im.naturalWidth);
+  const c=document.createElement('canvas');c.width=sw;c.height=sh;const x=c.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,sw,sh);
+  const p=x.getImageData(0,0,sw,sh).data,lum=new Float32Array(sw*sh);let sum=0;
+  for(let i=0;i<sw*sh;i++){lum[i]=0.299*p[i*4]+0.587*p[i*4+1]+0.114*p[i*4+2];sum+=lum[i];}
+  const flip=sum/(sw*sh)<128,pts=[];
+  for(let y=0;y<sh;y++)for(let xx=0;xx<sw;xx++){let v=lum[y*sw+xx];if(flip)v=255-v;if(v<120)pts.push(xx,y);}
+  if(pts.length<200)return 0;
+  let best=0,bestScore=-1;
+  for(let a=-6;a<=6.001;a+=0.25){const t=Math.tan(a*Math.PI/180),bins=new Float32Array(sh+sw);
+    for(let i=0;i<pts.length;i+=2){const b=Math.round(pts[i+1]-pts[i]*t+sw*0.5);if(b>=0&&b<bins.length)bins[b]++;}
+    let sc=0;for(let i=0;i<bins.length;i++)sc+=bins[i]*bins[i];
+    if(sc>bestScore){bestScore=sc;best=a;}}
+  return best;
+}
+function prep(im){
+  const ang=skewAngle(im);
+  if(Math.abs(ang)>=0.25){ // straighten it first so rows and grid lines run level
+    const r=ang*Math.PI/180,w=im.naturalWidth,h=im.naturalHeight;
+    const W2=Math.ceil(Math.abs(w*Math.cos(r))+Math.abs(h*Math.sin(r))),H2=Math.ceil(Math.abs(w*Math.sin(r))+Math.abs(h*Math.cos(r)));
+    const c2=document.createElement('canvas');c2.width=W2;c2.height=H2;const x2=c2.getContext('2d');
+    x2.fillStyle='#fff';x2.fillRect(0,0,W2,H2);x2.translate(W2/2,H2/2);x2.rotate(-r);x2.drawImage(im,-w/2,-h/2);
+    im={naturalWidth:W2,naturalHeight:H2,src:c2,draw:c2};
+  }
+  const scale=Math.min(3,Math.max(1,1800/im.naturalWidth));
+  const W=Math.round(im.naturalWidth*scale),H=Math.round(im.naturalHeight*scale);
+  const c=document.createElement('canvas');c.width=W;c.height=H;const x=c.getContext('2d',{willReadFrequently:true});
+  x.imageSmoothingEnabled=true;x.imageSmoothingQuality='high';x.drawImage(im.draw||im,0,0,W,H);
+  const d=x.getImageData(0,0,W,H),p=d.data,g=new Uint8Array(W*H);let sum=0;
+  for(let i=0;i<W*H;i++){const v=0.299*p[i*4]+0.587*p[i*4+1]+0.114*p[i*4+2];g[i]=v;sum+=v;}
+  const dark=sum/(W*H)<128;
+  for(let i=0;i<W*H;i++){const v=dark?255-g[i]:g[i];g[i]=v;p[i*4]=p[i*4+1]=p[i*4+2]=v;}
+  x.putImageData(d,0,0);
+  return {c,g,W,H,scale};
+}
+/* ---------- grid lines: rows and columns of pixels that are slightly grey almost all the way across ---------- */
+function findLines(g,W,H,scale){
+  // background = the most common shade
+  const hist=new Uint32Array(256);for(let i=0;i<g.length;i+=7)hist[g[i]]++;
+  let bg=255,best=0;for(let v=0;v<256;v++)if(hist[v]>best){best=hist[v];bg=v;}
+  const thr=bg-10,dark=bg-80;
+  // typical text height: bands of rows that contain dark (text) pixels
+  const bandsH=[];let st=-1;
+  for(let y=0;y<H;y++){const o=y*W;let d=false;for(let x=0;x<W;x+=2)if(g[o+x]<dark){d=true;break;}
+    if(d&&st<0)st=y;if(!d&&st>=0){bandsH.push(y-st);st=-1;}}
+  const textH=Math.max(8,median(bandsH.filter(h=>h>3))||20);
+  // A grid line is a thin stripe of *light grey* pixels (not dark like text) running most of the way
+  // across, broken only by short gaps. Dark text strokes, even a date repeated in every row, don't count.
+  const maxW=Math.max(4,6*scale),gap=Math.max(2,Math.round(scale*1.5));
+  const grey=v=>v<thr&&v>=dark;
+  const score=(len,n,at)=>{const out=new Float32Array(len);
+    for(let i=0;i<len;i++){let on=0,miss=0,best=0,cur=0;
+      for(let j=0;j<n;j++){if(grey(at(i,j))){on++;cur++;miss=0;}else if(++miss>gap){best=Math.max(best,cur);cur=0;}}
+      best=Math.max(best,cur);out[i]=best/n;}
+    return out;};
+  const vert=score(W,H,(x,y)=>g[y*W+x]),hor=score(H,W,(y,x)=>g[y*W+x]);
+  const pick=(arr,len)=>{
+    const runs=[];let run=null;
+    for(let i=0;i<len;i++){if(arr[i]>0.3){if(!run)run=[i,i];else run[1]=i;}else if(run){runs.push(run);run=null;}}
+    if(run)runs.push(run);
+    // a shaded block (like the row-number column) is broken up by the numbers printed in it: join the pieces
+    const joined=[];runs.forEach(r=>{const p=joined[joined.length-1];
+      if(p&&r[0]-p[1]<textH&&(p[1]-p[0]+1>maxW||r[1]-r[0]+1>maxW))p[1]=r[1];else joined.push([...r]);});
+    // thin stripe = a grid line; a wide shaded block counts as a line on each edge
+    const out=[];joined.forEach(r=>{if(r[1]-r[0]+1<=maxW)out.push((r[0]+r[1])/2);else out.push(r[0],r[1]);});
+    const merged=[];out.forEach(v=>{if(merged.length&&v-merged[merged.length-1]<Math.max(4*scale,textH*0.5))merged[merged.length-1]=(merged[merged.length-1]+v)/2;else merged.push(v);});
+    return merged;};
+  let v=pick(vert,W),h=pick(hor,H);
+  // a real grid has cells at least a line of text tall and a few letters wide
+  // (the row-number column on the far left is allowed to be narrow)
+  const tooTight=(ls,min,skipFirst)=>ls.some((x,i)=>i>(skipFirst?1:0)&&x-ls[i-1]<min);
+  if(tooTight(h,textH*1.1,false))h=[];
+  if(tooTight(v,textH*1.0,true))v=[];
+  return {v,h,bg,textH};
+}
+/* ---------- turning words into a table ---------- */
+function allWords(data){const w=[];(data.blocks||[]).forEach(b=>(b.paragraphs||[]).forEach(p=>(p.lines||[]).forEach(l=>(l.words||[]).forEach(x=>{if(x.text&&x.text.trim())w.push(x);}))));return w;}
+function median(a){if(!a.length)return 0;const s=[...a].sort((x,y)=>x-y);return s[Math.floor(s.length/2)];}
+function buildTable(words,lines){
+  words.forEach(w=>{w.cx=(w.bbox.x0+w.bbox.x1)/2;w.cy=(w.bbox.y0+w.bbox.y1)/2;w.h=w.bbox.y1-w.bbox.y0;});
+  const mh=median(words.map(w=>w.h))||20;
+  // rows: by horizontal grid lines when there are enough, otherwise by grouping words on the same height
+  let rowOf;
+  if(lines.h.length>=3)rowOf=w=>lines.h.filter(y=>y<w.cy).length;
+  else{const ys=[...words].sort((a,b)=>a.cy-b.cy);let r=-1,top=-1e9;ys.forEach(w=>{if(w.cy-top>mh*0.7){r++;top=w.cy;}w._r=r;});rowOf=w=>w._r;}
+  // columns: by vertical grid lines, otherwise by gaps that no word crosses
+  let colOf;
+  if(lines.v.length>=2)colOf=w=>lines.v.filter(x=>x<w.cx).length;
+  else{
+    const ivs=words.map(w=>[w.bbox.x0,w.bbox.x1]).sort((a,b)=>a[0]-b[0]);
+    const charW=median(words.map(w=>(w.bbox.x1-w.bbox.x0)/Math.max(1,w.text.length)))||10;
+    const cuts=[];let end=-1e9;
+    ivs.forEach(([a,b])=>{if(end>-1e9&&a-end>charW*2.2)cuts.push((a+end)/2);end=Math.max(end,b);});
+    colOf=w=>cuts.filter(x=>x<w.cx).length;
+  }
+  const cells={};let maxR=0,maxC=0;
+  words.forEach(w=>{const r=rowOf(w),c=colOf(w),k=r+','+c;(cells[k]=cells[k]||[]).push(w);maxR=Math.max(maxR,r);maxC=Math.max(maxC,c);});
+  let m=[],low=[];
+  for(let r=0;r<=maxR;r++){const row=[],lr=[];for(let c=0;c<=maxC;c++){
+    const ws=(cells[r+','+c]||[]).sort((a,b)=>(a.cy-b.cy>mh*0.6)?1:(b.cy-a.cy>mh*0.6)?-1:a.cx-b.cx);
+    row.push(ws.map(w=>w.text).join(' ').trim());lr.push(ws.length?Math.min(...ws.map(w=>w.confidence)):100);}
+    m.push(row);low.push(lr);}
+  // drop empty rows and columns
+  const keepR=m.map(r=>r.some(v=>v));m=m.filter((_,i)=>keepR[i]);low=low.filter((_,i)=>keepR[i]);
+  const keepC=(m[0]||[]).map((_,c)=>m.some(r=>r[c]));m=m.map(r=>r.filter((_,c)=>keepC[c]));low=low.map(r=>r.filter((_,c)=>keepC[c]));
+  return {m,low};
+}
+/* ---------- reading one cell at a time (most accurate when the screenshot has grid lines) ---------- */
+async function readCells(w,c,g,W,lines,onProgress){
+  const xs=lines.v,ys=lines.h,ink=lines.bg-45,cells=[];
+  for(let r=0;r<ys.length-1;r++)for(let k=0;k<xs.length-1;k++){
+    const x0=Math.ceil(xs[k])+3,x1=Math.floor(xs[k+1])-3,y0=Math.ceil(ys[r])+3,y1=Math.floor(ys[r+1])-3;
+    if(x1-x0<6||y1-y0<6)continue;
+    let has=false;for(let y=y0;y<y1&&!has;y+=2){const o=y*W;for(let x=x0;x<x1;x+=2)if(g[o+x]<ink){has=true;break;}}
+    // count lines of text in the cell (wrapped text needs a different reading mode)
+    let bands=0;if(has){let inBand=false,gap=0;for(let y=y0;y<y1;y++){let row=false;const o=y*W;for(let x=x0;x<x1;x++)if(g[o+x]<ink){row=true;break;}
+      if(row){if(!inBand){bands++;inBand=true;}gap=0;}else if(inBand&&++gap>=2)inBand=false;}}
+    cells.push({r,k,x0,y0,x1,y1,has,multi:bands>=2});
+  }
+  const todo=cells.filter(x=>x.has),out=document.createElement('canvas'),ox=out.getContext('2d');
+  await w.setParameters({tessedit_pageseg_mode:CELL_PSM}); // one line of text per cell
+  for(let i=0;i<todo.length;i++){
+    const cl=todo[i],cw=cl.x1-cl.x0,ch=cl.y1-cl.y0,sc=Math.min(4,Math.max(1,56/ch)),pad=12;
+    out.width=Math.round(cw*sc)+pad*2;out.height=Math.round(ch*sc)+pad*2;
+    ox.fillStyle='#fff';ox.fillRect(0,0,out.width,out.height);ox.imageSmoothingQuality='high';
+    ox.drawImage(c,cl.x0,cl.y0,cw,ch,pad,pad,cw*sc,ch*sc);
+    { // stretch contrast so faint grey text on a shaded cell reads as dark on white
+      const id=ox.getImageData(pad,pad,Math.max(1,out.width-pad*2),Math.max(1,out.height-pad*2)),q=id.data;
+      let lo=255,hi=0;for(let j=0;j<q.length;j+=4){if(q[j]<lo)lo=q[j];if(q[j]>hi)hi=q[j];}
+      if(hi-lo>20){const k=255/(hi-lo);for(let j=0;j<q.length;j+=4){const v=Math.max(0,Math.min(255,(q[j]-lo)*k));q[j]=q[j+1]=q[j+2]=v;}ox.putImageData(id,pad,pad);}
+    }
+    if(cl.multi)await w.setParameters({tessedit_pageseg_mode:'6'});
+    let {data}=await w.recognize(out);
+    if(cl.multi)await w.setParameters({tessedit_pageseg_mode:CELL_PSM});
+    else if(data.confidence<65){ // maybe the text wraps onto two lines in this cell: try reading it as a block
+      await w.setParameters({tessedit_pageseg_mode:'6'});
+      const alt=(await w.recognize(out)).data;
+      await w.setParameters({tessedit_pageseg_mode:CELL_PSM});
+      if(alt.confidence>data.confidence)data=alt;
+    }
+    cl.text=(data.text||'').replace(/\s+/g,' ').trim();cl.conf=data.confidence;
+    onProgress((i+1)/todo.length,i+1,todo.length);
+  }
+  const R=ys.length-1,K=xs.length-1;
+  let m=Array.from({length:R},()=>new Array(K).fill('')),low=Array.from({length:R},()=>new Array(K).fill(100));
+  todo.forEach(cl=>{m[cl.r][cl.k]=cl.text;low[cl.r][cl.k]=cl.conf;});
+  const keepR=m.map(r=>r.some(v=>v));m=m.filter((_,i)=>keepR[i]);low=low.filter((_,i)=>keepR[i]);
+  const keepC=(m[0]||[]).map((_,k)=>m.some(r=>r[k]));m=m.map(r=>r.filter((_,k)=>keepC[k]));low=low.map(r=>r.filter((_,k)=>keepC[k]));
+  return {m,low};
+}
+async function readWhole(w,c,lines){
+  await w.setParameters({tessedit_pageseg_mode:'11'});
+  const {data}=await w.recognize(c,{},{blocks:true});
+  const words=allWords(data);if(!words.length)return null;
+  return buildTable(words,{v:[],h:[]}); // line words up by position (grid lines, if any, didn't help)
+}
+/* ---------- clean-up ---------- */
+function fixCell(t){
+  t=t.replace(/^[|\[\]]+|[|\[\]]+$/g,'').trim();               // bits of cell borders
+  t=t.replace(/\b([AaPp])\s?\.?\s?[MmNn]\.?(?=\s|$)/g,(m,a)=>a.toUpperCase()+'M'); // A.M., AN, pm → AM / PM
+  t=t.replace(/(\d)\s*:\s*(\d)/g,'$1:$2');                       // "1 :06" → "1:06"
+  t=t.replace(/(\d)(AM|PM)\b/g,'$1 $2');                         // "1:15AM" → "1:15 AM"
+  // inside things that are clearly numbers or times, swap letters that look like digits
+  t=t.replace(/[0-9OoIl|SB:.,]+/g,tok=>{
+    if(!/\d/.test(tok)||/^[A-Za-z]+$/.test(tok))return tok;
+    return tok.replace(/[Oo]/g,'0').replace(/[Il|]/g,'1').replace(/(?<=\d)S|S(?=\d)/g,'5').replace(/(?<=\d)B|B(?=\d)/g,'8');
+  });
+  return t.replace(/\s{2,}/g,' ');
+}
+// Flag numbers that don't look like the rest of their column, e.g. "115" in a column of 8.7, 10.1, 12.2
+// (the reader dropped the decimal point) or "1" among 10, 12, 13. They're shaded for checking, not changed.
+function flagOddOnes(m,low){
+  const isNum=v=>/^[\d.:,\s]*\d[\d.:,\s]*(AM|PM)?$/.test(v);
+  for(let c=0;c<(m[0]||[]).length;c++){
+    const cells=m.map((r,i)=>({i,v:r[c]})).filter(x=>x.v&&isNum(x.v));
+    if(cells.length<4)continue;
+    const dec=cells.filter(x=>/\d\.\d/.test(x.v)).length/cells.length;
+    const dig=x=>(x.v.match(/\d/g)||[]).length,counts={};cells.forEach(x=>counts[dig(x)]=(counts[dig(x)]||0)+1);
+    const med=[...cells].map(dig).sort((a,b)=>a-b)[Math.floor(cells.length/2)];
+    cells.forEach(x=>{
+      const hasDec=/\d\.\d/.test(x.v);
+      if((dec>=0.6&&!hasDec)||(dec<=0.4&&hasDec)||(counts[dig(x)]===1&&cells.length>=5&&Math.abs(dig(x)-med)>=1))low[x.i][c]=Math.min(low[x.i][c],40);
+    });
+  }
+  return low;
+}
+function trimHeaders(m,low){
+  let removed=[];
+  // column letters along the top: A B C …
+  const first=m.length?m[0].filter(v=>v):[];
+  if(first.length>=2&&first.filter(v=>/^[A-Za-z]{1,2}$/.test(v)).length/first.length>=0.7&&!first.some(v=>/\d/.test(v))){m=m.slice(1);low=low.slice(1);removed.push('column letters');}
+  // row numbers down the left: 1, 2, 3 … (mostly counting up by one, a few misreads allowed).
+  // Unlike a real data column, it has a number in the top row too, not a heading.
+  if(m.length>=2){
+    const col=m.map(r=>r[0]).filter(v=>v),nums=col.filter(v=>/^\d{1,4}$/.test(v)).map(v=>parseInt(v,10));
+    if(col.length>=2&&/^\d{1,4}$/.test(col[0])&&nums.length/col.length>=0.7){
+      let steps=0;for(let i=1;i<nums.length;i++)if(nums[i]>nums[i-1]&&nums[i]-nums[i-1]<=2)steps++;
+      if(steps/Math.max(1,nums.length-1)>=0.7){m=m.map(r=>r.slice(1));low=low.map(r=>r.slice(1));removed.push('row numbers');}
+    }
+  }
+  return {m,low,removed};
+}
+
+/* ---------- reading ---------- */
+async function getWorker(){
+  if(worker)return worker;
+  if(!window.Tesseract)throw new Error('reader-missing');
+  worker=await Tesseract.createWorker('eng',1,{workerPath:CDN.worker,corePath:CDN.core,langPath:CDN.lang,
+    logger:m=>{if(/load/.test(m.status||'')){setBar(m.progress||0);setStatus('Getting the text reader ready (first time only)…');}}});
+  await worker.setParameters({preserve_interword_spaces:'1'});
+  return worker;
+}
+$('go').onclick=async()=>{
+  if(!img)return;$('go').disabled=true;$('result').hidden=true;setBar(0);setStatus('Getting the text reader ready…');
+  try{
+    const w=await getWorker();
+    const {c,g,W,H,scale}=prep(img);const lines=findLines(g,W,H,scale);
+    let m,low;
+    if(lines.v.length>=2&&lines.h.length>=2){
+      ({m,low}=await readCells(w,c,g,W,lines,(p,i,n)=>{setBar(p);setStatus(`Reading cell ${i} of ${n}…`);}));
+      const avg=low.flat().filter((_,i)=>m.flat()[i]).reduce((a,b,_,arr)=>a+b/arr.length,0);
+      if(avg<60){ // the grid didn't line up with the text; read the whole picture instead and keep whichever reads better
+        setStatus('Trying another way to read it…');
+        const alt=await readWhole(w,c,lines);
+        const altAvg=alt?alt.low.flat().filter((_,i)=>alt.m.flat()[i]).reduce((a,b,_,arr)=>a+b/arr.length,0):0;
+        if(alt&&altAvg>avg){m=alt.m;low=alt.low;}
+      }
+    }else{ // no grid lines: read the whole picture and line words up into rows and columns
+      const r=await readWhole(w,c,lines);
+      if(!r){setBar(null);setStatus('No text found. Try a sharper screenshot, cropped to the cells.',true);return;}
+      ({m,low}=r);
+    }
+    if(!m.length){setBar(null);setStatus('No text found. Try a sharper screenshot, cropped to the cells.',true);return;}
+    if($('fix').checked)m=m.map(r=>r.map(fixCell));
+    let removed=[];if($('trim').checked)({m,low,removed}=trimHeaders(m,low));
+    low=flagOddOnes(m,low);
+    matrix=m;lowConf=low;showGrid();
+    const hard=low.flat().filter(v=>v<70).length;
+    setBar(null);
+    setStatus(`Found ${m.length} row${m.length===1?'':'s'} and ${m[0]?m[0].length:0} column${(m[0]||[]).length===1?'':'s'}${removed.length?', left out the '+removed.join(' and '):''}.${hard?` ${hard} cell${hard===1?' needs':'s need'} a check.`:''}`);
+  }catch(e){
+    console.error(e);setBar(null);
+    setStatus(e.message==='reader-missing'||/fetch|network|load/i.test(String(e))?'Couldn\'t download the text reader. Check your connection; a work network may block cdn.jsdelivr.net.':'Something went wrong reading that image. Try a different screenshot.',true);
+  }finally{$('go').disabled=false;}
+};
+
+/* ---------- results ---------- */
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function showGrid(){
+  const t=$('grid');
+  t.innerHTML=matrix.map((r,ri)=>'<tr>'+r.map((v,ci)=>`<td contenteditable="true" data-r="${ri}" data-c="${ci}"${lowConf[ri][ci]<70&&v?' class="low"':''}>${esc(v)}</td>`).join('')+'</tr>').join('');
+  t.querySelectorAll('td').forEach(td=>td.oninput=()=>{matrix[+td.dataset.r][+td.dataset.c]=td.textContent.trim();td.classList.remove('low');});
+  $('resTitle').textContent=`Rows found (${matrix.length})`;$('result').hidden=false;$('copyMsg').textContent='';
+}
+const tsv=()=>matrix.map(r=>r.map(v=>v.replace(/[\t\n]/g,' ')).join('\t')).join('\n');
+async function copyText(){
+  const text=tsv();
+  try{await navigator.clipboard.writeText(text);return true;}catch(e){}
+  const ta=document.createElement('textarea');ta.value=text;ta.style.position='fixed';ta.style.opacity='0';document.body.appendChild(ta);ta.select();
+  let ok=false;try{ok=document.execCommand('copy');}catch(e){}ta.remove();return ok;
+}
+const IS_IOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const SHEETS_HOME='https://docs.google.com/spreadsheets/';
+function openSheets(){
+  if(/Android/i.test(navigator.userAgent)){location.href='intent://#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=com.google.android.apps.docs.editors.sheets;S.browser_fallback_url='+encodeURIComponent(SHEETS_HOME)+';end';return;}
+  if(IS_IOS){location.href='googlesheets://';setTimeout(()=>{if(!document.hidden)location.href=SHEETS_HOME;},1500);return;}
+  window.open(SHEETS_HOME,'_blank');
+}
+$('copyOnly').onclick=async()=>{$('copyMsg').textContent=await copyText()?'Copied. In your sheet, long-press the first cell and tap Paste.':'Couldn\'t copy. Select the cells above and copy them by hand.';};
+$('copyOpen').onclick=async()=>{if(await copyText()){$('copyMsg').textContent='Copied. In your sheet, long-press the first cell and tap Paste.';openSheets();}else $('copyMsg').textContent='Couldn\'t copy. Select the cells above and copy them by hand.';};
+</script>
+</body>
+</html>
