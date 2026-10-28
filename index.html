@@ -867,7 +867,7 @@ const say=(...w)=>`<div class="say">${w.map(x=>x==='→'?'<span class="arrow">th
 const GUIDE=[
   {t:'Start listening',b:`<p>Tap <b>Start listening</b> and allow the microphone. When the light says <b>Mic live</b>, it's listening.</p>
     <p>From then on you can use your voice the whole time. It reads every value back to you and names each field, so you don't need to look at the screen.</p>
-    <div class="tip">On an iPhone the first start downloads the speech reader, so use Wi-Fi.</div>`},
+  `},
   {t:'Log a new headset',b:`<p>Say the headset number. It repeats it back. If it heard wrong, just say the right number. When it's right, say next.</p>${say('12','→','next')}
     <div class="tip">The date fills in by itself.</div>`},
   {t:'Fill in the details',b:`<p>For each field, say the value, then next. It repeats each one back.</p>
