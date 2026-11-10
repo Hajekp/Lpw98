@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Logger check-up</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#EEF1F4;--panel:#FFFFFF;--ink:#1C2A3A;--muted:#5B6B7C;--line:#D3DAE2;--accent:#2F5BEA;--accent-ink:#fff;--ok:#1E8A5A;--bad:#C62839;--warn:#A86A00;--chip:#E2E8EF;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){--bg:#141B24;--panel:#1D2631;--ink:#E7EDF3;--muted:#9AA9B8;--line:#2E3A48;--accent:#6F8FFF;--accent-ink:#0E1420;--ok:#4FCB8F;--bad:#FF6B7A;--warn:#E0B341;--chip:#273240}}
+:root[data-theme="dark"]{--bg:#141B24;--panel:#1D2631;--ink:#E7EDF3;--muted:#9AA9B8;--line:#2E3A48;--accent:#6F8FFF;--accent-ink:#0E1420;--ok:#4FCB8F;--bad:#FF6B7A;--warn:#E0B341;--chip:#273240}
+*,*::before,*::after{box-sizing:inherit}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:17px;line-height:1.45}
+main{max-width:640px;margin:0 auto;padding:16px 16px 48px}
+h1{font-size:1.4rem;margin:4px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px}
+h2{font-size:1.1rem;margin:24px 0 8px}
+button{font:inherit;cursor:pointer;border-radius:12px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:12px 16px;min-height:48px}
+button:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.primary{background:var(--accent);color:var(--accent-ink);border:none;font-weight:700;width:100%;font-size:1.05rem}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:6px 14px}
+.chk{display:grid;grid-template-columns:28px 1fr;gap:10px;padding:12px 0;border-top:1px solid var(--line)}
+.chk:first-child{border-top:none}
+.ic{font-size:1.2rem;line-height:1.4}
+.chk>div>b{display:block}
+.chk p{margin:2px 0 0;color:var(--muted);font-size:.92rem}
+.chk .fix{color:var(--ink);background:var(--bg);border-radius:10px;padding:8px 10px;margin-top:6px;font-size:.92rem}
+.meter{height:10px;border-radius:5px;background:var(--chip);overflow:hidden;margin-top:8px}
+.meter i{display:block;height:100%;width:0;background:var(--ok);transition:width .08s linear}
+.summary{background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:14px;margin-top:16px}
+.summary.good{border-color:var(--ok)}.summary.bad{border-color:var(--bad)}
+.summary h2{margin:0 0 6px}
+.summary ol{margin:6px 0 0;padding-left:20px}.summary li{margin:6px 0}
+.row{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.hint{color:var(--muted);font-size:.88rem;margin:8px 0 0}
+textarea{width:100%;font:inherit;font-size:.8rem;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px;margin-top:8px;display:none}
+</style>
+</head>
+<body>
+<main>
+  <h1>Logger check-up</h1>
+  <p class="sub">Tests everything the headset voice logger needs on this phone and tells you what to fix. Open it the same way you open the logger (Chrome tab or home-screen icon).</p>
+  <button class="primary" id="run">Run the check-up</button>
+  <p class="hint">It will ask for the microphone. Tap <b>Allow</b>. When asked, say a few words so it can hear you.</p>
+
+  <div id="summary" class="summary" hidden></div>
+
+  <h2>Results</h2>
+  <div class="panel" id="list"></div>
+
+  <div class="row"><button id="copy">Copy results</button></div>
+  <p class="hint">Send the copied results to whoever is helping you fix it.</p>
+  <textarea id="out" rows="8" readonly></textarea>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+const UA=navigator.userAgent||'';
+const IS_IOS=/iPad|iPhone|iPod/.test(UA)||(navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+const IS_ANDROID=/Android/i.test(UA);
+const IN_CHROME_IOS=/CriOS/.test(UA);
+const STANDALONE=navigator.standalone===true||(window.matchMedia&&matchMedia('(display-mode: standalone)').matches);
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const CHECKS=[
+  {id:'where',name:'Where it\'s open'},
+  {id:'secure',name:'Secure page'},
+  {id:'micapi',name:'Microphone support'},
+  {id:'mic',name:'Microphone access'},
+  {id:'hear',name:'Hearing your voice'},
+  {id:'sound',name:'Beeps and sound'},
+  {id:'voice',name:'Talk back (spoken read-backs)'},
+  {id:'builtin',name:'Phone\'s built-in speech recognition'},
+  {id:'download',name:'Downloading the on-phone speech reader'},
+  {id:'wasm',name:'Running the on-phone speech reader'},
+  {id:'storage',name:'Saving rows on this phone'},
+  {id:'awake',name:'Keeping the screen on'}
+];
+const res={};
+function draw(){
+  $('list').innerHTML=CHECKS.map(c=>{const r=res[c.id]||{s:'wait',t:'Not checked yet'};
+    const ic={ok:'✅',bad:'❌',warn:'⚠️',wait:'⏳',skip:'➖'}[r.s];
+    return `<div class="chk"><span class="ic" aria-hidden="true">${ic}</span><div><b>${c.name}</b><p>${r.t}</p>${r.fix?`<div class="fix">${r.fix}</div>`:''}${c.id==='hear'&&r.meter?'<div class="meter"><i id="lvl"></i></div>':''}</div></div>`;}).join('');
+}
+function set(id,s,t,fix,extra){res[id]=Object.assign({s,t,fix},extra||{});draw();}
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const withTimeout=(p,ms)=>Promise.race([p,new Promise((_,j)=>setTimeout(()=>j(new Error('timeout')),ms))]);
+
+/* ---------- checks that don't need a tap ---------- */
+function quickChecks(){
+  const browser=IN_CHROME_IOS?'Chrome':IS_IOS?(STANDALONE?'a home-screen icon (runs on Safari\'s engine)':'Safari'):/Chrome/.test(UA)?'Chrome':'this browser';
+  set('where','ok',`${IS_IOS?'iPhone':IS_ANDROID?'Android phone':'Computer or tablet'}, opened in ${browser}.`,
+    IS_IOS&&!IN_CHROME_IOS?'On a work iPhone where Safari is blocked, open the logger in a regular <b>Chrome</b> tab instead. Home-screen icons use Safari\'s settings, which you can\'t change when Safari is blocked.':'');
+  set('secure',window.isSecureContext?'ok':'bad',window.isSecureContext?'The page is secure (https), so the microphone can be used.':'The page isn\'t secure, so phones won\'t allow the microphone.',
+    window.isSecureContext?'':'Open it from <b>https://hajekp.github.io/Lpw98/</b>.');
+  const mic=!!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia);
+  set('micapi',mic?'ok':'bad',mic?'This browser can use a microphone.':'This browser can\'t use a microphone at all.',mic?'':'Use Chrome on this phone.');
+  const wasm=typeof WebAssembly==='object';
+  set('wasm',wasm?'ok':'bad',wasm?'This phone can run the on-phone speech reader.':'This browser can\'t run the on-phone speech reader.',wasm?'':'Use the latest Chrome.');
+  try{localStorage.setItem('__chk','1');localStorage.removeItem('__chk');
+    let n=0;try{const s=JSON.parse(localStorage.getItem('headsetVoiceLog.v2')||'null');n=s&&s.rows?s.rows.length:0;}catch(e){}
+    set('storage','ok',`Rows can be saved here.${n?` The logger has ${n} saved row${n===1?'':'s'} in this browser.`:''}`);
+  }catch(e){set('storage','bad','This browser won\'t save anything, so rows would be lost when the page closes.','Don\'t use a private tab for logging. Use a normal Chrome tab.');}
+  set('awake','wakeLock' in navigator?'ok':'warn','wakeLock' in navigator?'The logger can keep the screen on while listening.':'The screen may turn off while you\'re logging, which stops the mic.',
+    'wakeLock' in navigator?'':'Set Auto-Lock to a longer time in iPhone Settings → Display & Brightness, or tap the screen now and then.');
+}
+
+/* ---------- downloads ---------- */
+async function checkDownloads(){
+  set('download','wait','Checking…');
+  const urls=['https://cdn.jsdelivr.net/npm/@huggingface/transformers@4.3.1/package.json','https://huggingface.co/onnx-community/moonshine-tiny-ONNX/resolve/main/config.json'];
+  const ok=[];
+  for(const u of urls){try{const r=await withTimeout(fetch(u,{cache:'no-store'}),8000);ok.push(r.ok);}catch(e){ok.push(false);}}
+  if(ok.every(Boolean))set('download','ok','Both download sites can be reached, so the on-phone speech reader can download.');
+  else set('download','bad',`Couldn't reach ${!ok[0]&&!ok[1]?'either download site':!ok[0]?'cdn.jsdelivr.net':'huggingface.co'}, so the on-phone speech reader can't download on this connection.`,
+    'Try once on <b>mobile data</b> or home Wi-Fi. After it downloads once, it\'s saved and works on work Wi-Fi too. If it fails on mobile data as well, the phone itself blocks these sites, and IT would need to allow them.');
+}
+
+/* ---------- checks that need a tap ---------- */
+let actx=null;
+async function checkSound(){
+  try{actx=actx||new (window.AudioContext||window.webkitAudioContext)();await actx.resume();
+    const o=actx.createOscillator(),g=actx.createGain();o.frequency.value=880;g.gain.value=0.15;o.connect(g);g.connect(actx.destination);o.start();o.stop(actx.currentTime+0.15);
+    set('sound',actx.state==='running'?'ok':'warn',actx.state==='running'?'Sound works. You should have heard a beep.':'Sound is paused by the phone.',
+      actx.state==='running'?'If you didn\'t hear the beep, turn the volume up and make sure silent mode is off.':'Turn off silent mode and tap Run again.');
+  }catch(e){set('sound','bad','This browser can\'t play the beeps.','Beeps are optional; the logger still works without them.');}
+}
+async function checkVoice(){
+  if(!window.speechSynthesis){set('voice','warn','This browser can\'t speak, so there won\'t be spoken read-backs.','The logger still works; values show on screen.');return;}
+  set('voice','wait','Speaking a test sentence…');
+  const spoke=await new Promise(res=>{try{speechSynthesis.cancel();const u=new SpeechSynthesisUtterance('Check up');u.rate=1.2;let done=false;
+    u.onstart=()=>{if(!done){done=true;res(true);}};u.onerror=()=>{if(!done){done=true;res(false);}};speechSynthesis.speak(u);setTimeout(()=>{if(!done){done=true;res(null);}},4000);}catch(e){res(false);}});
+  if(spoke)set('voice','ok','Talk back works. You should have heard "Check up".','If you didn\'t hear it, turn the volume up and turn off silent mode.');
+  else set('voice','warn','The phone didn\'t start speaking.','Spoken read-backs may not work on this phone, but beeps and the screen still show what was caught. Turn off silent mode and try again.');
+}
+let micStream=null;
+async function checkMic(){
+  if(!(navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)){set('mic','bad','No microphone support in this browser.','Use Chrome.');set('hear','skip','Skipped.');return false;}
+  set('mic','wait','Asking for the microphone… tap Allow.');
+  try{micStream=await withTimeout(navigator.mediaDevices.getUserMedia({audio:{echoCancellation:false,noiseSuppression:false,autoGainControl:false}}),20000);
+    set('mic','ok','The microphone is allowed.');return true;}
+  catch(e){
+    const name=e&&e.name||String(e);
+    if(/NotAllowed|Security|Permission/i.test(name)){
+      set('mic','bad','The microphone is blocked for this page.',IS_IOS?(IN_CHROME_IOS
+        ?'1. iPhone <b>Settings → Apps → Chrome</b> → turn <b>Microphone</b> on.<br>2. In Chrome, tap the icon left of the address bar → <b>Permissions</b> → turn Microphone on, then reload.<br>3. Still blocked? Swipe Chrome closed and reopen it.<br>If there is no Microphone switch for Chrome in Settings, the work phone\'s management is blocking it and IT must allow it.'
+        :'This is a home-screen icon or Safari. With Safari blocked on a work phone, its microphone setting can\'t be changed. Delete the home-screen icon (copy your rows to Sheets first), add it again from Chrome, and tap Allow. Or use the logger in a regular Chrome tab.')
+        :'Tap the icon left of the address bar → <b>Permissions</b> → allow Microphone, then reload. Also check the phone\'s Settings → Apps → Chrome → Permissions → Microphone.');
+    }else if(/NotFound|NotReadable|Overconstrained/i.test(name))set('mic','bad','No working microphone was found.','Another app may be using the mic (a call, voice memo or video app). Close it and try again. Disconnect Bluetooth earbuds if they\'re connected.');
+    else if(name==='Error'&&/timeout/.test(e.message))set('mic','bad','The phone never answered the microphone request.','Reload the page and tap Run again. If no "Allow" question appears, the mic is blocked; see the steps for a blocked mic.');
+    else set('mic','bad','The microphone couldn\'t be opened ('+name+').','Restart Chrome and try again.');
+    set('hear','skip','Skipped, because the microphone isn\'t available.');return false;
+  }
+}
+async function checkHear(){
+  set('hear','wait','Say a few words now…',null,{meter:true});
+  try{
+    actx=actx||new (window.AudioContext||window.webkitAudioContext)();await actx.resume();
+    const src=actx.createMediaStreamSource(micStream),an=actx.createAnalyser();an.fftSize=1024;src.connect(an);
+    const buf=new Float32Array(an.fftSize);let peak=0,frames=0;const t0=performance.now();
+    while(performance.now()-t0<5000){an.getFloatTimeDomainData(buf);let s=0;for(let i=0;i<buf.length;i++)s+=buf[i]*buf[i];const rms=Math.sqrt(s/buf.length);
+      peak=Math.max(peak,rms);frames++;const l=document.getElementById('lvl');if(l)l.style.width=Math.min(100,rms*600)+'%';await sleep(50);}
+    src.disconnect();
+    if(!frames||actx.state!=='running')set('hear','bad','No sound came through. The phone paused the audio.','Turn off silent mode, close other apps using the mic, and tap Run again.');
+    else if(peak<0.004)set('hear','bad','The microphone is on, but it heard almost nothing.','Check that nothing is covering the mic, take off any case that blocks it, speak closer to the phone, and disconnect Bluetooth earbuds.');
+    else if(peak<0.02)set('hear','warn','It heard you, but very quietly.','Speak a bit louder or closer to the phone, and make sure nothing covers the mic.');
+    else set('hear','ok','It hears your voice clearly.');
+  }catch(e){set('hear','bad','Couldn\'t listen to the microphone ('+(e.name||e)+').','Restart Chrome and try again.');}
+}
+async function checkBuiltin(){
+  if(!SR){set('builtin','skip',IS_IOS?'Not available in this browser. That\'s normal for Chrome on iPhone; the logger uses the on-phone speech reader instead.':'Not available in this browser. The logger will use the on-phone speech reader instead.');return;}
+  set('builtin','wait','Starting the phone\'s speech recognition…');
+  const r=await new Promise(res=>{let rec;try{rec=new SR();}catch(e){return res({s:'err',e:'create'});}
+    let done=false;const fin=v=>{if(done)return;done=true;try{rec.abort();}catch(e){}res(v);};
+    rec.lang='en-US';rec.onstart=()=>fin({s:'ok'});rec.onaudiostart=()=>fin({s:'ok'});rec.onerror=e=>fin({s:'err',e:e.error});
+    try{rec.start();}catch(e){fin({s:'err',e:'start'});}setTimeout(()=>fin({s:'stuck'}),6000);});
+  if(r.s==='ok')set('builtin','ok','The phone\'s built-in speech recognition starts. Speech engine "Automatic" or "Phone\'s built-in" can use it.');
+  else if(r.s==='stuck')set('builtin','bad','It never starts. This is what makes the logger stick on "Reconnecting…".',
+    IS_IOS?'On iPhone it needs <b>Settings → General → Keyboard → Enable Dictation</b> turned on, which work phones often lock. Easiest fix: in the logger, set <b>⚙️ → Speech engine → On-phone model</b>.':'In the logger, set <b>⚙️ → Speech engine → On-phone model</b>.');
+  else if(r.e==='not-allowed'||r.e==='service-not-allowed')set('builtin','bad','It\'s blocked on this phone.',IS_IOS?'Turn on <b>Settings → General → Keyboard → Enable Dictation</b> and <b>Settings → Privacy & Security → Speech Recognition</b> for this browser, or use <b>⚙️ → Speech engine → On-phone model</b> in the logger.':'Use <b>⚙️ → Speech engine → On-phone model</b> in the logger.');
+  else set('builtin','bad','It gave an error ('+r.e+').','Use <b>⚙️ → Speech engine → On-phone model</b> in the logger.');
+}
+
+/* ---------- summary ---------- */
+function summarize(){
+  const bad=CHECKS.filter(c=>res[c.id]&&res[c.id].s==='bad'),el=$('summary');el.hidden=false;
+  const micOK=res.mic&&res.mic.s==='ok',hearOK=res.hear&&res.hear.s!=='bad',bOK=res.builtin&&res.builtin.s==='ok',dlOK=res.download&&res.download.s==='ok',wasmOK=res.wasm&&res.wasm.s==='ok';
+  let best;
+  if(!micOK)best='Fix the <b>microphone</b> first (steps below). Nothing else can work until the phone lets the page use it.';
+  else if(!hearOK)best='The microphone is allowed but isn\'t picking you up. See <b>Hearing your voice</b> below.';
+  else if(bOK)best='Everything the logger needs works. Use Speech engine <b>Automatic</b> (or Phone\'s built-in).';
+  else if(dlOK&&wasmOK)best='Set the logger to <b>⚙️ → Speech engine → On-phone model</b>. The phone\'s built-in recognition doesn\'t work here, but the on-phone reader will. Use Wi-Fi the first time so it can download.';
+  else best='Neither speech option works on this connection. Try once on <b>mobile data</b> so the on-phone reader can download, then set <b>⚙️ → Speech engine → On-phone model</b>.';
+  el.className='summary '+(bad.length&&!(micOK&&hearOK&&(bOK||(dlOK&&wasmOK)))?'bad':'good');
+  el.innerHTML=`<h2>${micOK&&hearOK&&(bOK||(dlOK&&wasmOK))?'✅ The logger can work on this phone':'❌ Something is blocking the logger'}</h2><p style="margin:0">${best}</p>`;
+}
+
+/* ---------- run ---------- */
+$('run').onclick=async()=>{
+  $('run').disabled=true;$('run').textContent='Checking…';
+  CHECKS.forEach(c=>{if(!['where','secure','micapi','wasm','storage','awake'].includes(c.id))delete res[c.id];});draw();
+  await checkSound();
+  const dl=checkDownloads();
+  if(await checkMic())await checkHear();
+  try{micStream&&micStream.getTracks().forEach(t=>t.stop());}catch(e){}
+  await checkBuiltin();
+  await checkVoice();
+  await dl;
+  summarize();
+  $('run').disabled=false;$('run').textContent='Run the check-up again';
+  $('summary').scrollIntoView({behavior:'smooth',block:'start'});
+};
+$('copy').onclick=async()=>{
+  const lines=['Logger check-up '+new Date().toLocaleString(),UA,...CHECKS.map(c=>{const r=res[c.id]||{s:'wait',t:'not checked'};return `${({ok:'OK',bad:'PROBLEM',warn:'WARNING',wait:'NOT RUN',skip:'SKIPPED'})[r.s]} - ${c.name}: ${r.t}`;})];
+  const text=lines.join('\n');
+  try{await navigator.clipboard.writeText(text);$('copy').textContent='Copied';setTimeout(()=>$('copy').textContent='Copy results',1500);}
+  catch(e){const o=$('out');o.value=text;o.style.display='block';o.select();}
+};
+quickChecks();draw();
+</script>
+</body>
+</html>
